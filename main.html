@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>Ledgrs — Crypto Portfolio Ledger</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="container">
+<div class="header">
+    <div class="logo-section">
+        <div class="logo">
+            <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M16 2L18.5 8.5L25 10L20.5 15L22.5 22L16 18.5L9.5 22L11.5 15L7 10L13.5 8.5L16 2Z" fill="#f97316" stroke="#ea580c" stroke-width="1.5" stroke-linejoin="round"/>
+                <circle cx="16" cy="16" r="3" fill="#fef3c7"/>
+            </svg>
+        </div>
+        <div class="brand">
+            <h1>ledgrs</h1>
+            <div class="badge">crypto portfolio tracker</div>
+        </div>
+    </div>
+    <div class="action-group">
+        <button id="importCSVBtn" class="btn-secondary">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            Import CSV
+        </button>
+        <button id="exportCSVBtn" class="btn-secondary">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 6px;">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            Export CSV
+        </button>
+    </div>
+</div>
+    <input type="file" id="importFileInput" accept=".csv" style="display: none;">
+
+    <!-- stats -->
+    <div class="stats-grid" id="statsGrid">
+        <div class="stat-card usd-card">
+            <div class="stat-label">💰 USD BALANCE</div>
+            <div class="stat-value" id="usdBalance">$0</div>
+            <div class="usd-controls">
+                <input type="number" id="usdAddAmount" placeholder="Amount" step="any" value="1000">
+                <button id="usdAddBtn" class="btn-secondary" style="background: rgba(255,255,255,0.2);">+ Add</button>
+                <button id="usdWithdrawBtn" class="btn-secondary" style="background: rgba(255,255,255,0.2);">- Withdraw</button>
+            </div>
+        </div>
+        <div class="stat-card"><div class="stat-label">Total Buys (cost)</div><div class="stat-value" id="totalCost">$0</div></div>
+        <div class="stat-card"><div class="stat-label">Total Sold (proceeds)</div><div class="stat-value" id="totalSold">$0</div></div>
+        <div class="stat-card"><div class="stat-label">Realized Profit</div><div class="stat-value" id="totalProfit">$0</div></div>
+        <div class="stat-card"><div class="stat-label">Open positions</div><div class="stat-value" id="openPositions">0</div></div>
+        <div class="stat-card"><div class="stat-label">Unrealized P&L</div><div class="stat-value" id="unrealizedPnl">$0</div></div>
+    </div>
+
+    <!-- LIVE PRICES PANEL -->
+    <div class="form-panel" style="background: rgba(16, 185, 129, 0.05); border-color: rgba(16, 185, 129, 0.2);">
+        <div class="form-title">📊 Live Market Prices (Auto-refresh every 10s)</div>
+        <div class="form-row">
+            <div class="input-group"><label>BTC Price (USD)</label><input type="number" id="currentBTC" placeholder="Current BTC price" step="any" value="50000" readonly></div>
+            <div class="input-group"><label>XAUT Price (USD)</label><input type="number" id="currentXAUT" placeholder="Current Gold price" step="any" value="2850" readonly></div>
+            <div class="input-group"><label>ETH Price (USD)</label><input type="number" id="currentETH" placeholder="Current ETH price" step="any" value="3200" readonly></div>
+            <button id="refreshNowBtn" class="btn-secondary">⟳ Refresh Now</button>
+            <button id="toggleAutoRefreshBtn" class="btn-secondary">⏸️ Pause Auto-Refresh</button>
+        </div>
+        <div class="form-row" style="margin-top: 0.8rem;">
+            <div class="input-group">
+                <span id="priceStatus" class="price-status">🟢 Live prices active</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- ADD BUY FORM - COLLAPSIBLE -->
+    <div class="form-panel">
+        <div class="form-title collapsible" id="buySectionHeader">➕ Record a BUY</div>
+        <div class="collapsible-content" id="buySectionContent">
+            <div class="form-row">
+                <div class="input-group"><label>Wallet</label><input type="text" id="buyWallet" placeholder="e.g., MetaMask, Ledger" value="Main"></div>
+                <div class="input-group"><label>Asset</label>
+                    <select id="buyAsset">
+                        <option value="BTC">BTC (Bitcoin)</option>
+                        <option value="XAUT">XAUT (Tether Gold)</option>
+                        <option value="ETH">ETH (Ethereum)</option>
+                    </select>
+                </div>
+                <div class="input-group">
+                    <label>Amount</label>
+                    <div class="input-with-slider">
+                        <input type="number" id="buyAmount" placeholder="0.00" step="any" value="0.05">
+                        <input type="range" id="buyAmountSlider" class="amount-slider" min="0" max="1" step="0.001" value="0.05">
+                        <div class="quick-buttons">
+                            <button type="button" class="quick-btn" data-amount="0.01">0.01</button>
+                            <button type="button" class="quick-btn" data-amount="0.05">0.05</button>
+                            <button type="button" class="quick-btn" data-amount="0.1">0.1</button>
+                            <button type="button" class="quick-btn" data-amount="0.5">0.5</button>
+                            <button type="button" class="quick-btn" data-amount="1">1</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="input-group"><label>Buy Price (USD)</label><input type="number" id="buyPrice" placeholder="price per unit" step="any" value="45000"></div>
+                <div class="input-group"><label>Date (YYYY-MM-DD)</label><input type="date" id="buyDate"></div>
+                <button id="addBuyBtn">+ Add Buy</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ADD SELL FORM - COLLAPSIBLE -->
+    <div class="form-panel">
+        <div class="form-title collapsible" id="sellSectionHeader">💸 Record a SELL</div>
+        <div class="collapsible-content" id="sellSectionContent">
+            <div class="form-row">
+                <div class="input-group"><label>Select OPEN Buy</label><select id="sellBuyId"></select></div>
+                <div class="input-group">
+                    <label>Sell Amount</label>
+                    <div class="input-with-slider">
+                        <input type="number" id="sellAmount" placeholder="max available" step="any">
+                        <input type="range" id="sellAmountSlider" class="amount-slider" min="0" max="1" step="0.001" value="0">
+                        <div class="quick-buttons" id="sellQuickButtons">
+                            <button type="button" class="quick-btn" data-percent="0.25">25%</button>
+                            <button type="button" class="quick-btn" data-percent="0.5">50%</button>
+                            <button type="button" class="quick-btn" data-percent="0.75">75%</button>
+                            <button type="button" class="quick-btn" data-percent="1">100%</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="input-group"><label>Sell Price (USD)</label><input type="number" id="sellPrice" placeholder="price per unit" step="any"></div>
+                <div class="input-group"><label>Sell Date</label><input type="date" id="sellDate"></div>
+                <button id="addSellBtn">✖ Record Sell</button>
+            </div>
+            <div id="sellWarning" style="font-size:0.7rem; margin-top: 8px; color:#b45343;"></div>
+        </div>
+    </div>
+
+    <!-- SELL ITEM DETAILS PANEL -->
+    <div id="sellDetailsPanel" class="form-panel" style="background: #f9fbfd; border: 1px solid #e2ecf5; display: none;">
+        <div class="form-title">📋 Selected Position Details</div>
+        <div class="details-grid">
+            <div class="detail-item"><div class="detail-label">ASSET</div><div class="detail-value" id="detailAsset">-</div></div>
+            <div class="detail-item"><div class="detail-label">WALLET</div><div class="detail-value" id="detailWallet">-</div></div>
+            <div class="detail-item"><div class="detail-label">BUY PRICE</div><div class="detail-value" id="detailBuyPrice">-</div></div>
+            <div class="detail-item"><div class="detail-label">REMAINING</div><div class="detail-value" id="detailRemaining">-</div></div>
+            <div class="detail-item"><div class="detail-label">TOTAL COST BASIS</div><div class="detail-value" id="detailCostBasis">-</div></div>
+            <div class="detail-item"><div class="detail-label">CURRENT VALUE</div><div class="detail-value" id="detailCurrentValue">-</div></div>
+            <div class="detail-item"><div class="detail-label">UNREALIZED P&L</div><div class="detail-value" id="detailUnrealized">-</div></div>
+            <div class="detail-item"><div class="detail-label">BUY DATE</div><div class="detail-value" id="detailBuyDate">-</div></div>
+        </div>
+    </div>
+
+    <!-- TRANSACTIONS LEDGER -->
+    <div class="form-title" style="margin-bottom: 0.7rem;">📋 Full Ledger (buys & sells)</div>
+    <div class="table-wrapper">
+        <table id="ledgerTable">
+            <thead>
+                <tr>
+                    <th>Date</th><th>Type</th><th>Wallet</th><th>Asset</th><th>Amount</th><th>Price (USD)</th><th>Total (USD)</th><th>Current Price</th><th>Unrealized P&L</th><th></th>
+                </tr>
+            </thead>
+            <tbody id="ledgerBody"></tbody>
+        </table>
+    </div>
+    
+    <!-- Pagination Controls -->
+    <div class="pagination" id="paginationControls">
+        <button id="prevPageBtn" class="btn-secondary">◀ Previous</button>
+        <span id="pageInfo">Page 1 of 1</span>
+        <button id="nextPageBtn" class="btn-secondary">Next ▶</button>
+        <select id="rowsPerPageSelect">
+            <option value="10">10 rows</option>
+            <option value="25">25 rows</option>
+            <option value="50">50 rows</option>
+            <option value="100">100 rows</option>
+        </select>
+    </div>
+    
+    <div class="footnote">⚡ Data saved in browser localStorage. Import/Export CSV. Live prices from CoinGecko API (free, no key needed). Auto-refreshes every 10 seconds.</div>
+</div>
+
+<script src="main.js"></script>
+</body>
+</html>
