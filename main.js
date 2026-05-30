@@ -236,8 +236,8 @@ async function fetchLivePrices() {
     try {
         const statusEl = document.getElementById('priceStatus');
         if (statusEl) {
-            statusEl.innerHTML = '🟡 Fetching prices...';
-            statusEl.style.background = '#fff3cd';
+            statusEl.innerHTML = '● FETCHING';
+            statusEl.className = 'status-pill status-offline';
         }
         
         const assetIds = Object.values(assetToCoinGeckoId).join(',');
@@ -266,9 +266,9 @@ async function fetchLivePrices() {
         if (xautInput && currentPrices['XAUT'] > 0) xautInput.value = currentPrices['XAUT'];
         
         if (statusEl) {
-            const timestamp = new Date().toLocaleTimeString();
-            statusEl.innerHTML = `🟢 Live • Last update: ${timestamp}`;
-            statusEl.style.background = '#d4edda';
+            const timestamp = new Date().toLocaleTimeString('en-US', {hour12:false});
+            statusEl.innerHTML = `● LIVE · ${timestamp}`;
+            statusEl.className = 'status-pill status-live';
         }
         
         calculateUnrealizedPnl();
@@ -299,8 +299,8 @@ async function fetchLivePrices() {
         console.error('Price fetch error:', error);
         const statusEl = document.getElementById('priceStatus');
         if (statusEl) {
-            statusEl.innerHTML = '🔴 Failed to fetch. Click Refresh';
-            statusEl.style.background = '#f8d7da';
+            statusEl.innerHTML = '● OFFLINE · CLICK REFRESH';
+            statusEl.className = 'status-pill status-offline';
         }
         return false;
     }
@@ -321,12 +321,12 @@ function toggleAutoRefresh() {
     autoRefreshEnabled = !autoRefreshEnabled;
     const btn = document.getElementById('toggleAutoRefreshBtn');
     if (autoRefreshEnabled) {
-        btn.innerHTML = '⏸️ Pause Auto-Refresh';
-        btn.style.background = '#eef2f8';
+        btn.innerHTML = '⏸ PAUSE';
+        btn.style.background = '';
         fetchLivePrices();
     } else {
-        btn.innerHTML = '▶️ Resume Auto-Refresh';
-        btn.style.background = '#f8f9fa';
+        btn.innerHTML = '▶ RESUME';
+        btn.style.background = '';
     }
 }
 
@@ -470,8 +470,8 @@ function renderLedger() {
     for(let row of paginatedData) {
         const tr = document.createElement('tr');
         if(row.type === 'buy') {
-            let unrealizedCell = '—';
-            let currentPriceDisplay = '—';
+            let unrealizedCell = '<span style="color:var(--text-dim)">—</span>';
+            let currentPriceDisplay = '<span style="color:var(--text-dim)">—</span>';
             
             if(row.remaining > 0.000001 && row.currentPrice > 0) {
                 currentPriceDisplay = `$${row.currentPrice.toFixed(2)}`;
@@ -479,31 +479,33 @@ function renderLedger() {
                 unrealizedCell = `<span class="${unrealizedClass}">${row.unrealized >= 0 ? '+' : ''}$${row.unrealized.toFixed(2)}</span>`;
             }
             
+            tr.classList.add('row-buy');
             tr.innerHTML = `
                 <td>${row.date}</td>
-                <td>🟢 BUY</td>
+                <td><span class="badge-buy">BUY</span></td>
                 <td>${row.wallet}</td>
-                <td>${row.asset}</td>
-                <td>${row.amount.toFixed(6)} (${row.remaining.toFixed(6)} open)</td>
+                <td style="color:var(--accent);font-weight:700">${row.asset}</td>
+                <td>${row.amount.toFixed(6)} <span style="color:var(--text-dim);font-size:0.65rem">(${row.remaining.toFixed(6)} open)</span></td>
                 <td>$${row.price.toFixed(2)}</td>
                 <td>$${row.total.toFixed(2)}</td>
                 <td>${currentPriceDisplay}</td>
                 <td>${unrealizedCell}</td>
-                <td><button class="delete-btn btn-small" data-type="buy" data-id="${row.id}">✖</button></td>
+                <td><button class="delete-btn" data-type="buy" data-id="${row.id}">✕</button></td>
             `;
         } else {
             const profitClass = row.profit >=0 ? 'profit-positive' : 'profit-negative';
+            tr.classList.add('row-sell');
             tr.innerHTML = `
                 <td>${row.date}</td>
-                <td>🔴 SELL</td>
+                <td><span class="badge-sell">SELL</span></td>
                 <td>${row.wallet}</td>
-                <td>${row.asset}</td>
+                <td style="color:var(--red);font-weight:700">${row.asset}</td>
                 <td>${row.amount.toFixed(6)}</td>
                 <td>$${row.price.toFixed(2)}</td>
                 <td>$${row.total.toFixed(2)}</td>
-                <td>—</td>
+                <td><span style="color:var(--text-dim)">—</span></td>
                 <td class="${profitClass}">${row.profit>=0 ? '+' : ''}$${row.profit.toFixed(2)}</td>
-                <td><button class="delete-btn btn-small" data-type="sell" data-id="${row.id}">✖</button></td>
+                <td><button class="delete-btn" data-type="sell" data-id="${row.id}">✕</button></td>
             `;
         }
         tbody.appendChild(tr);
