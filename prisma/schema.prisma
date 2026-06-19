@@ -1,0 +1,50 @@
+// LEDGRS data model.
+//
+// Money/amount fields are stored as decimal STRINGS and all arithmetic is done
+// with decimal.js (see src/lib/calculations.ts). This keeps the values exact
+// (no binary float drift) and fully portable across SQLite and Postgres.
+//
+// To deploy on Postgres: change `provider` to "postgresql" and set DATABASE_URL
+// to your connection string. No model changes are required.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Buy {
+  id        Int      @id @default(autoincrement())
+  wallet    String
+  asset     String
+  amount    String // decimal string — units of the asset
+  price     String // decimal string — USD per unit at purchase
+  date      String // ISO date (YYYY-MM-DD)
+  createdAt DateTime @default(now())
+
+  sells Sell[]
+
+  @@index([asset])
+}
+
+model Sell {
+  id        Int      @id @default(autoincrement())
+  buyId     Int
+  buy       Buy      @relation(fields: [buyId], references: [id], onDelete: Cascade)
+  amount    String // decimal string — units sold from the linked buy
+  sellPrice String // decimal string — USD per unit at sale
+  sellDate  String // ISO date (YYYY-MM-DD)
+  profit    String // decimal string — realized P&L in USD
+  createdAt DateTime @default(now())
+
+  @@index([buyId])
+}
+
+// Simple key/value store for app-level settings (e.g. the USD cash balance).
+model Setting {
+  key   String @id
+  value String
+}
