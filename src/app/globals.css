@@ -2,8 +2,6 @@
    LEDGRS — TERMINAL THEME
    =========================== */
 
-@import url('https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500;600&display=swap');
-
 :root {
   --bg:         #090c0f;
   --bg1:        #0d1117;
@@ -918,6 +916,8 @@ tbody tr.row-sell td:first-child {
   letter-spacing: 0.1em;
   color: var(--text-dim);
 }
+
+button:disabled { opacity: 0.35; cursor: not-allowed; }
 
 /* ---- FOOTNOTE ---- */
 .footnote {
