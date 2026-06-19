@@ -72,7 +72,7 @@
       <div class="stat-label">USD CASH</div>
       <div class="stat-value" id="usdBalance">$0.00</div>
       <div class="usd-controls">
-        <input type="number" id="usdAddAmount" placeholder="0.00" step="any" value="1000">
+        <input type="number" id="usdAddAmount" placeholder="0.00" step="any" min="0" value="1000">
         <button id="usdAddBtn" class="btn-usd-add">+ ADD</button>
         <button id="usdWithdrawBtn" class="btn-usd-withdraw">− WDR</button>
       </div>
@@ -143,11 +143,11 @@
       <div class="collapsible-content" id="buySectionContent">
         <div class="form-grid">
           <div class="field">
-            <label>WALLET</label>
+            <label for="buyWallet">WALLET</label>
             <input type="text" id="buyWallet" placeholder="e.g. MetaMask" value="Main">
           </div>
           <div class="field">
-            <label>ASSET</label>
+            <label for="buyAsset">ASSET</label>
             <select id="buyAsset">
               <option value="BTC">BTC — Bitcoin</option>
               <option value="XAUT">XAUT — Tether Gold</option>
@@ -155,9 +155,9 @@
             </select>
           </div>
           <div class="field field-wide">
-            <label>AMOUNT</label>
+            <label for="buyAmount">AMOUNT</label>
             <div class="input-with-slider">
-              <input type="number" id="buyAmount" placeholder="0.000000" step="any" value="0.05">
+              <input type="number" id="buyAmount" placeholder="0.000000" step="any" min="0" value="0.05">
               <input type="range" id="buyAmountSlider" class="slider" min="0" max="1" step="0.001" value="0.05">
               <div class="quick-buttons">
                 <button type="button" class="qbtn" data-amount="0.01">0.01</button>
@@ -169,11 +169,11 @@
             </div>
           </div>
           <div class="field">
-            <label>BUY PRICE (USD)</label>
-            <input type="number" id="buyPrice" placeholder="0.00" step="any" value="45000">
+            <label for="buyPrice">BUY PRICE (USD)</label>
+            <input type="number" id="buyPrice" placeholder="0.00" step="any" min="0" value="45000">
           </div>
           <div class="field">
-            <label>DATE</label>
+            <label for="buyDate">DATE</label>
             <input type="date" id="buyDate">
           </div>
         </div>
@@ -193,13 +193,13 @@
       <div class="collapsible-content" id="sellSectionContent">
         <div class="form-grid">
           <div class="field field-wide">
-            <label>SELECT OPEN POSITION</label>
+            <label for="sellBuyId">SELECT OPEN POSITION</label>
             <select id="sellBuyId"></select>
           </div>
           <div class="field field-wide">
-            <label>SELL AMOUNT</label>
+            <label for="sellAmount">SELL AMOUNT</label>
             <div class="input-with-slider">
-              <input type="number" id="sellAmount" placeholder="0.000000" step="any">
+              <input type="number" id="sellAmount" placeholder="0.000000" step="any" min="0">
               <input type="range" id="sellAmountSlider" class="slider" min="0" max="1" step="0.001" value="0">
               <div class="quick-buttons" id="sellQuickButtons">
                 <button type="button" class="qbtn" data-percent="0.25">25%</button>
@@ -210,11 +210,11 @@
             </div>
           </div>
           <div class="field">
-            <label>SELL PRICE (USD)</label>
-            <input type="number" id="sellPrice" placeholder="0.00" step="any">
+            <label for="sellPrice">SELL PRICE (USD)</label>
+            <input type="number" id="sellPrice" placeholder="0.00" step="any" min="0">
           </div>
           <div class="field">
-            <label>DATE</label>
+            <label for="sellDate">DATE</label>
             <input type="date" id="sellDate">
           </div>
         </div>
