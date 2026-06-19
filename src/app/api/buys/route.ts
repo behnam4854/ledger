@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { dec } from "@/lib/calculations";
 
@@ -7,6 +8,10 @@ export const dynamic = "force-dynamic";
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 export async function POST(req: NextRequest) {
+  const session = await auth();
+  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const userId = Number(session.user.id);
+
   let body: Record<string, unknown>;
   try {
     body = await req.json();
@@ -33,7 +38,7 @@ export async function POST(req: NextRequest) {
   if (price.lessThanOrEqualTo(0)) return NextResponse.json({ error: "Price must be > 0" }, { status: 400 });
 
   const buy = await prisma.buy.create({
-    data: { wallet, asset, amount: amount.toString(), price: price.toString(), date },
+    data: { userId, wallet, asset, amount: amount.toString(), price: price.toString(), date },
   });
 
   return NextResponse.json(buy, { status: 201 });

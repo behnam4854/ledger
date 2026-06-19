@@ -17,18 +17,18 @@ if (process.env.NODE_ENV !== "production") {
 const USD_KEY = "usd_balance";
 const DEFAULT_USD = 10000;
 
-export async function getUsdBalance(): Promise<number> {
-  const row = await prisma.setting.findUnique({ where: { key: USD_KEY } });
+export async function getUsdBalance(userId: number): Promise<number> {
+  const row = await prisma.setting.findUnique({ where: { userId_key: { userId, key: USD_KEY } } });
   if (!row) return DEFAULT_USD;
   const value = Number(row.value);
   return Number.isFinite(value) ? value : DEFAULT_USD;
 }
 
-export async function setUsdBalance(value: number): Promise<number> {
+export async function setUsdBalance(userId: number, value: number): Promise<number> {
   const safe = Number.isFinite(value) ? value : 0;
   await prisma.setting.upsert({
-    where: { key: USD_KEY },
-    create: { key: USD_KEY, value: String(safe) },
+    where: { userId_key: { userId, key: USD_KEY } },
+    create: { userId, key: USD_KEY, value: String(safe) },
     update: { value: String(safe) },
   });
   return safe;

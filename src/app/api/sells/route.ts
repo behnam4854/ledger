@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { computeRemaining, dec, realizedProfit } from "@/lib/calculations";
 import type { Sell } from "@/lib/types";
@@ -8,6 +9,10 @@ export const dynamic = "force-dynamic";
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 export async function POST(req: NextRequest) {
+  const session = await auth();
+  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const userId = Number(session.user.id);
+
   let body: Record<string, unknown>;
   try {
     body = await req.json();
@@ -30,10 +35,10 @@ export async function POST(req: NextRequest) {
   if (amount.lessThanOrEqualTo(0)) return NextResponse.json({ error: "Amount must be > 0" }, { status: 400 });
   if (sellPrice.lessThanOrEqualTo(0)) return NextResponse.json({ error: "Sell price must be > 0" }, { status: 400 });
 
-  // Validate available quantity inside a transaction to avoid oversell races.
   const result = await prisma.$transaction(async (tx) => {
+    // Ownership check inside the transaction.
     const buy = await tx.buy.findUnique({ where: { id: buyId } });
-    if (!buy) return { error: "Buy not found", status: 404 as const };
+    if (!buy || buy.userId !== userId) return { error: "Buy not found", status: 404 as const };
 
     const existing = await tx.sell.findMany({ where: { buyId } });
     const remaining = dec(
@@ -57,6 +62,7 @@ export async function POST(req: NextRequest) {
     const profit = realizedProfit(buy.price, amount.toString(), sellPrice.toString());
     const sell = await tx.sell.create({
       data: {
+        userId,
         buyId,
         amount: amount.toString(),
         sellPrice: sellPrice.toString(),

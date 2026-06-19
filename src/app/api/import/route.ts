@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { dec, realizedProfit } from "@/lib/calculations";
 
@@ -30,6 +31,10 @@ function toDecOrNull(v: unknown): string | null {
 }
 
 export async function POST(req: NextRequest) {
+  const session = await auth();
+  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const userId = Number(session.user.id);
+
   let body: { buys?: ImportBuy[]; sells?: ImportSell[] };
   try {
     body = await req.json();
@@ -45,7 +50,6 @@ export async function POST(req: NextRequest) {
     let importedSells = 0;
     let skippedSells = 0;
 
-    // Track created buys so sells can be matched against them by asset/price.
     const created: { id: number; asset: string; price: string }[] = [];
 
     for (const raw of incomingBuys) {
@@ -56,6 +60,7 @@ export async function POST(req: NextRequest) {
 
       const buy = await tx.buy.create({
         data: {
+          userId,
           wallet: String(raw.wallet ?? "Main").trim() || "Main",
           asset: String(raw.asset ?? "BTC").trim().toUpperCase() || "BTC",
           amount,
@@ -67,8 +72,8 @@ export async function POST(req: NextRequest) {
       importedBuys++;
     }
 
-    // Also consider pre-existing buys for matching.
-    const existingBuys = await tx.buy.findMany();
+    // Also consider pre-existing buys for this user for sell matching.
+    const existingBuys = await tx.buy.findMany({ where: { userId } });
     const matchPool = existingBuys.map((b) => ({ id: b.id, asset: b.asset, price: b.price }));
 
     for (const raw of incomingSells) {
@@ -78,7 +83,6 @@ export async function POST(req: NextRequest) {
       const asset = String(raw.asset ?? "").trim().toUpperCase();
       if (!amount || !sellPrice || !sellDate) continue;
 
-      // Best-effort match: same asset, buy price within 10% of the sell price.
       const sellPriceDec = dec(sellPrice);
       const match = matchPool.find(
         (b) =>
@@ -95,7 +99,7 @@ export async function POST(req: NextRequest) {
       const profit = provided ?? realizedProfit(match.price, amount, sellPrice);
 
       await tx.sell.create({
-        data: { buyId: match.id, amount, sellPrice, sellDate, profit },
+        data: { userId, buyId: match.id, amount, sellPrice, sellDate, profit },
       });
       importedSells++;
     }

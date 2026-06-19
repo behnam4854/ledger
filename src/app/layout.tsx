@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import Providers from "./providers";
 
 export const metadata: Metadata = {
   title: "LEDGRS — Crypto Portfolio Ledger",
@@ -20,7 +21,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <div className="scanlines" />
         <div className="noise" />
-        {children}
+        <Providers>{children}</Providers>
       </body>
     </html>
   );

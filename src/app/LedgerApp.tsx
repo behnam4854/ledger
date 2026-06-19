@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSession, signOut } from "next-auth/react";
 import * as api from "@/lib/api";
 import { parseCsv, toCsv } from "@/lib/csv";
 import { portfolioStats, unrealizedForBuy, unrealizedPnl } from "@/lib/calculations";
@@ -37,6 +38,7 @@ interface LedgerRow {
 }
 
 export default function LedgerApp() {
+  const { data: session } = useSession();
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
   const [prices, setPrices] = useState<PriceMap>(EMPTY_PRICES);
   const [priceStatus, setPriceStatus] = useState<"live" | "offline" | "fetching">("fetching");
@@ -359,6 +361,14 @@ export default function LedgerApp() {
 
         <div className="header-right">
           <div className="sys-clock">{clock}</div>
+          {session?.user?.email && (
+            <div className="user-info">
+              <span className="user-email">{session.user.email}</span>
+              <button className="btn-ghost btn-sm" onClick={() => signOut({ callbackUrl: "/auth" })}>
+                LOGOUT
+              </button>
+            </div>
+          )}
           <div className="action-group">
             <button className="btn-ghost" onClick={() => fileInputRef.current?.click()}>
               IMPORT
