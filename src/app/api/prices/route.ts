@@ -1,12 +1,18 @@
 import { NextResponse } from "next/server";
+import { auth } from "@/auth";
+import { getUserCoins } from "@/lib/db";
 import { getPrices } from "@/lib/prices";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const { prices, fresh, updatedAt } = await getPrices();
+  const session = await auth();
+  if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const coins = await getUserCoins(Number(session.user.id));
+  const { prices, fresh, updatedAt } = await getPrices(coins);
   return NextResponse.json({
     prices,
+    coins,
     status: fresh ? "live" : "stale",
     updatedAt,
   });

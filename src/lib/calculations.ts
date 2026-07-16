@@ -89,3 +89,65 @@ export function unrealizedForBuy(buy: BuyWithRemaining, price: number): number |
   if (!price || price <= 0) return null;
   return dec(buy.remaining).times(price).minus(dec(buy.remaining).times(buy.price)).toNumber();
 }
+
+/** Current holdings broken down per asset. */
+export interface AssetAllocation {
+  asset: string;
+  qty: number; // remaining units still held
+  value: number; // current market value (0 when no live price)
+  cost: number; // cost basis of the remaining units
+}
+
+export interface PortfolioValuation {
+  holdingsValue: number; // live market value of all open positions
+  openCostBasis: number; // cost basis of all open positions
+  byAsset: AssetAllocation[]; // sorted by value (then cost) descending
+  priced: boolean; // true if at least one open position had a live price
+}
+
+/**
+ * Value every open position at live prices and roll it up per asset.
+ * Pure and decimal-exact, like the rest of this module.
+ */
+export function portfolioValuation(buys: BuyWithRemaining[], prices: PriceMap): PortfolioValuation {
+  const byAsset = new Map<string, { qty: Decimal; value: Decimal; cost: Decimal }>();
+  let holdingsValue = dec(0);
+  let openCostBasis = dec(0);
+  let priced = false;
+
+  for (const buy of buys) {
+    if (!isOpen(buy.remaining)) continue;
+    const remaining = dec(buy.remaining);
+    const cost = remaining.times(buy.price);
+    openCostBasis = openCostBasis.plus(cost);
+
+    const entry = byAsset.get(buy.asset) ?? { qty: dec(0), value: dec(0), cost: dec(0) };
+    entry.qty = entry.qty.plus(remaining);
+    entry.cost = entry.cost.plus(cost);
+
+    const price = prices[buy.asset as Asset];
+    if (price && price > 0) {
+      const value = remaining.times(price);
+      entry.value = entry.value.plus(value);
+      holdingsValue = holdingsValue.plus(value);
+      priced = true;
+    }
+    byAsset.set(buy.asset, entry);
+  }
+
+  const allocations: AssetAllocation[] = [...byAsset.entries()]
+    .map(([asset, e]) => ({
+      asset,
+      qty: e.qty.toNumber(),
+      value: e.value.toNumber(),
+      cost: e.cost.toNumber(),
+    }))
+    .sort((a, b) => b.value - a.value || b.cost - a.cost);
+
+  return {
+    holdingsValue: holdingsValue.toNumber(),
+    openCostBasis: openCostBasis.toNumber(),
+    byAsset: allocations,
+    priced,
+  };
+}

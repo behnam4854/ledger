@@ -1,29 +1,20 @@
-// Server-side price fetching with a shared in-memory cache.
-//
-// Fetching on the server (instead of from each browser) means a single cached
-// CoinGecko call serves every user, keeps us well under rate limits, and lets
-// us add an API key without exposing it to the client.
+// Server-side CoinGecko pricing with a shared in-memory cache.
 
-import { ASSET_TO_COINGECKO_ID, ASSETS, type PriceMap } from "./types";
+import { CORE_COINS, type CoinDefinition, type PriceMap } from "./types";
 
 const CACHE_TTL_MS = 10_000;
 
 interface PriceCache {
-  prices: PriceMap;
+  byCoinGeckoId: Record<string, number>;
   updatedAt: number | null;
 }
 
-const cache: PriceCache = {
-  prices: { BTC: 0, ETH: 0, XAUT: 0 },
-  updatedAt: null,
-};
+const cache: PriceCache = { byCoinGeckoId: {}, updatedAt: null };
+const inFlight = new Map<string, Promise<void>>();
 
-let inFlight: Promise<PriceCache> | null = null;
-
-async function fetchFromCoinGecko(): Promise<PriceMap> {
-  const ids = Object.values(ASSET_TO_COINGECKO_ID).join(",");
+async function fetchFromCoinGecko(coins: CoinDefinition[]): Promise<Record<string, number>> {
+  const ids = [...new Set(coins.map((coin) => coin.coingeckoId))].join(",");
   const url = `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd`;
-
   const res = await fetch(url, { signal: AbortSignal.timeout(8_000) });
   if (!res.ok) throw new Error(`CoinGecko HTTP ${res.status}`);
 
@@ -31,40 +22,78 @@ async function fetchFromCoinGecko(): Promise<PriceMap> {
   if (typeof data !== "object" || data === null) throw new Error("Invalid response");
 
   const record = data as Record<string, { usd?: number }>;
-  const prices: PriceMap = { ...cache.prices };
-  for (const asset of ASSETS) {
-    const usd = record[ASSET_TO_COINGECKO_ID[asset]]?.usd;
-    if (typeof usd === "number" && usd > 0) prices[asset] = usd;
+  const prices: Record<string, number> = {};
+  for (const coin of coins) {
+    const usd = record[coin.coingeckoId]?.usd;
+    if (typeof usd === "number" && usd > 0) prices[coin.coingeckoId] = usd;
   }
   return prices;
 }
 
-/** Returns cached prices, refreshing from CoinGecko when the cache is stale. */
-export async function getPrices(): Promise<{ prices: PriceMap; fresh: boolean; updatedAt: number | null }> {
+function toSymbolPrices(coins: CoinDefinition[]): PriceMap {
+  return Object.fromEntries(
+    coins.map((coin) => [coin.symbol, cache.byCoinGeckoId[coin.coingeckoId] ?? 0]),
+  );
+}
+
+/** Returns prices for the supplied user coin list, refreshing stale cache data. */
+export async function getPrices(
+  coins: CoinDefinition[] = CORE_COINS,
+): Promise<{ prices: PriceMap; fresh: boolean; updatedAt: number | null }> {
   const now = Date.now();
-  if (cache.updatedAt !== null && now - cache.updatedAt < CACHE_TTL_MS) {
-    return { prices: cache.prices, fresh: true, updatedAt: cache.updatedAt };
+  const hasEveryCoin = coins.every((coin) => cache.byCoinGeckoId[coin.coingeckoId] > 0);
+  if (hasEveryCoin && cache.updatedAt !== null && now - cache.updatedAt < CACHE_TTL_MS) {
+    return { prices: toSymbolPrices(coins), fresh: true, updatedAt: cache.updatedAt };
   }
 
-  // Collapse concurrent refreshes into one upstream request.
-  if (!inFlight) {
-    inFlight = (async () => {
+  // Collapse identical concurrent refreshes while allowing different user coin
+  // lists to fetch independently.
+  const requestKey = coins.map((coin) => coin.coingeckoId).sort().join(",");
+  let request = inFlight.get(requestKey);
+  if (!request) {
+    request = (async () => {
       try {
-        const prices = await fetchFromCoinGecko();
-        cache.prices = prices;
+        const prices = await fetchFromCoinGecko(coins);
+        cache.byCoinGeckoId = { ...cache.byCoinGeckoId, ...prices };
         cache.updatedAt = Date.now();
       } finally {
-        inFlight = null;
+        inFlight.delete(requestKey);
       }
-      return cache;
     })();
+    inFlight.set(requestKey, request);
   }
 
   try {
-    await inFlight;
-    return { prices: cache.prices, fresh: true, updatedAt: cache.updatedAt };
+    await request;
+    return { prices: toSymbolPrices(coins), fresh: true, updatedAt: cache.updatedAt };
   } catch {
-    // Upstream failed — serve last-known prices (possibly all-zero on cold start).
-    return { prices: cache.prices, fresh: false, updatedAt: cache.updatedAt };
+    return { prices: toSymbolPrices(coins), fresh: false, updatedAt: cache.updatedAt };
   }
+}
+
+interface CoinGeckoCoinResponse {
+  id?: string;
+  symbol?: string;
+  name?: string;
+  market_data?: { current_price?: { usd?: number } };
+}
+
+/** Fetch verified coin identity and pricing directly from CoinGecko. */
+export async function fetchCoinGeckoCoin(
+  coingeckoId: string,
+): Promise<{ coingeckoId: string; symbol: string; name: string } | null> {
+  const query = "localization=false&tickers=false&market_data=true&community_data=false&developer_data=false&sparkline=false";
+  const url = `https://api.coingecko.com/api/v3/coins/${encodeURIComponent(coingeckoId)}?${query}`;
+  const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`CoinGecko HTTP ${res.status}`);
+
+  const data = (await res.json()) as CoinGeckoCoinResponse;
+  const symbol = String(data.symbol ?? "").trim().toUpperCase();
+  const name = String(data.name ?? "").trim();
+  const usd = data.market_data?.current_price?.usd;
+  if (data.id !== coingeckoId || !symbol || !name || typeof usd !== "number" || !(usd > 0)) {
+    return null;
+  }
+  return { coingeckoId, symbol, name };
 }

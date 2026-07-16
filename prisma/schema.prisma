@@ -23,6 +23,47 @@ model User {
   buys     Buy[]
   sells    Sell[]
   settings Setting[]
+  coins    Coin[]
+  futuresPositions FuturesPosition[]
+}
+
+// Extra assets a user has enabled for their portfolio. The three built-in
+// assets (BTC, ETH and XAUT) live in code and do not need database rows.
+model Coin {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  symbol      String
+  name        String
+  coingeckoId String
+  createdAt   DateTime @default(now())
+
+  @@unique([userId, symbol])
+  @@unique([userId, coingeckoId])
+  @@index([userId])
+}
+
+// Isolated-margin paper futures positions. These never place exchange orders;
+// they are marked against the same CoinGecko prices used by the portfolio.
+model FuturesPosition {
+  id          Int       @id @default(autoincrement())
+  userId      Int
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  asset       String
+  side        String    // LONG | SHORT
+  leverage    Int
+  margin      String    // isolated collateral in USD
+  quantity    String    // asset units controlled by the position
+  entryPrice  String
+  stopLoss    String?
+  takeProfit  String?
+  status      String    @default("OPEN") // OPEN | CLOSED
+  exitPrice   String?
+  realizedPnl String?
+  openedAt    DateTime  @default(now())
+  closedAt    DateTime?
+
+  @@index([userId, status])
 }
 
 model Buy {
@@ -56,6 +97,21 @@ model Sell {
 
   @@index([userId])
   @@index([buyId])
+}
+
+// Daily price history (shared market data, like the live price cache — not
+// per-user). One row per asset per calendar day. This is the raw material for
+// indicators, signals and backtesting; we back it up from CoinGecko's free
+// market_chart endpoint and keep today's row fresh from the live price.
+model Candle {
+  asset     String
+  date      String   // ISO date (YYYY-MM-DD)
+  close     String   // decimal string — USD close price for that day
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@id([asset, date])
+  @@index([asset])
 }
 
 // Per-user key/value settings (e.g. USD cash balance).

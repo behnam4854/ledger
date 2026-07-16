@@ -1,6 +1,15 @@
 // Typed client-side wrappers around the JSON API.
 
-import type { Portfolio, PricesResponse } from "./types";
+import type {
+  Asset,
+  CandlesResponse,
+  CoinDefinition,
+  FuturesAccountResponse,
+  FuturesSide,
+  Portfolio,
+  PricesResponse,
+  SignalsResponse,
+} from "./types";
 
 async function jsonOrThrow<T>(res: Response): Promise<T> {
   const data = await res.json().catch(() => ({}));
@@ -16,6 +25,76 @@ export async function fetchPortfolio(): Promise<Portfolio> {
 
 export async function fetchPrices(): Promise<PricesResponse> {
   return jsonOrThrow<PricesResponse>(await fetch("/api/prices", { cache: "no-store" }));
+}
+
+export async function fetchCoins(): Promise<CoinDefinition[]> {
+  const data = await jsonOrThrow<{ coins: CoinDefinition[] }>(
+    await fetch("/api/coins", { cache: "no-store" }),
+  );
+  return data.coins;
+}
+
+export async function addCoin(url: string): Promise<CoinDefinition> {
+  const data = await jsonOrThrow<{ coin: CoinDefinition }>(
+    await fetch("/api/coins", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url }),
+    }),
+  );
+  return data.coin;
+}
+
+export async function fetchSignals(): Promise<SignalsResponse> {
+  return jsonOrThrow<SignalsResponse>(await fetch("/api/signals", { cache: "no-store" }));
+}
+
+export async function fetchFuturesAccount(): Promise<FuturesAccountResponse> {
+  return jsonOrThrow<FuturesAccountResponse>(await fetch("/api/futures", { cache: "no-store" }));
+}
+
+export async function openFuturesPosition(input: {
+  asset: string;
+  side: FuturesSide;
+  margin: string;
+  leverage: number;
+  entryPrice: string;
+  stopLoss: string;
+  takeProfit: string;
+}): Promise<void> {
+  await jsonOrThrow(
+    await fetch("/api/futures/positions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    }),
+  );
+}
+
+export async function closeFuturesPosition(id: number, exitPrice: string): Promise<void> {
+  await jsonOrThrow(
+    await fetch(`/api/futures/positions/${id}/close`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ exitPrice }),
+    }),
+  );
+}
+
+export async function fetchCandles(asset: Asset): Promise<CandlesResponse> {
+  return jsonOrThrow<CandlesResponse>(
+    await fetch(`/api/candles?asset=${asset}`, { cache: "no-store" }),
+  );
+}
+
+export async function backfillCandles(days = 365): Promise<{ total: number }> {
+  return jsonOrThrow<{ total: number }>(
+    await fetch("/api/candles/backfill", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ days }),
+    }),
+  );
 }
 
 export interface BuyInput {

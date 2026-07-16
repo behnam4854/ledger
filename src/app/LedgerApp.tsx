@@ -3,19 +3,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSession, signOut } from "next-auth/react";
 import * as api from "@/lib/api";
+import AppNav from "./AppNav";
 import { parseCsv, toCsv } from "@/lib/csv";
-import { portfolioStats, unrealizedForBuy, unrealizedPnl } from "@/lib/calculations";
-import { fmtQty, fmtSignedUsd, fmtUsd, today } from "@/lib/format";
+import { portfolioStats, portfolioValuation, unrealizedForBuy, unrealizedPnl } from "@/lib/calculations";
+import { fmtQty, fmtSignedPct, fmtSignedUsd, fmtUsd, today } from "@/lib/format";
 import {
-  ASSETS,
-  type Asset,
+  CORE_COINS,
   type BuyWithRemaining,
+  type CoinDefinition,
   type PriceMap,
   type Portfolio,
   type Sell,
 } from "@/lib/types";
 
-const EMPTY_PRICES: PriceMap = { BTC: 0, ETH: 0, XAUT: 0 };
+const EMPTY_PRICES: PriceMap = Object.fromEntries(CORE_COINS.map((coin) => [coin.symbol, 0]));
 const POSITIVE = "#1f8a4c";
 const NEGATIVE = "#c2412c";
 
@@ -41,6 +42,7 @@ export default function LedgerApp() {
   const { data: session } = useSession();
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
   const [prices, setPrices] = useState<PriceMap>(EMPTY_PRICES);
+  const [coins, setCoins] = useState<CoinDefinition[]>(CORE_COINS);
   const [priceStatus, setPriceStatus] = useState<"live" | "offline" | "fetching">("fetching");
   const [priceTime, setPriceTime] = useState<string>("");
   const [autoRefresh, setAutoRefresh] = useState(true);
@@ -51,6 +53,9 @@ export default function LedgerApp() {
   const [sellForm, setSellForm] = useState({ buyId: "", amount: "", price: "", date: "" });
   const [buyCollapsed, setBuyCollapsed] = useState(true);
   const [sellCollapsed, setSellCollapsed] = useState(true);
+  const [coinUrl, setCoinUrl] = useState("");
+  const [addingCoin, setAddingCoin] = useState(false);
+  const [coinError, setCoinError] = useState("");
 
   // Table state
   const [page, setPage] = useState(1);
@@ -82,6 +87,7 @@ export default function LedgerApp() {
     try {
       const data = await api.fetchPrices();
       setPrices(data.prices);
+      setCoins(data.coins);
       if (data.status === "live" && data.updatedAt) {
         setPriceStatus("live");
         setPriceTime(new Date(data.updatedAt).toLocaleTimeString("en-US", { hour12: false }));
@@ -125,7 +131,7 @@ export default function LedgerApp() {
     return () => clearInterval(id);
   }, []);
 
-  const priceFor = useCallback((asset: string): number => prices[asset as Asset] ?? 0, [prices]);
+  const priceFor = useCallback((asset: string): number => prices[asset] ?? 0, [prices]);
 
   const stats = useMemo(() => portfolioStats(buys, sells), [buys, sells]);
   const unrealized = useMemo(() => unrealizedPnl(buys, prices), [buys, prices]);
@@ -295,6 +301,22 @@ export default function LedgerApp() {
     }
   };
 
+  const onAddCoin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCoinError("");
+    setAddingCoin(true);
+    try {
+      const coin = await api.addCoin(coinUrl);
+      setCoinUrl("");
+      setBuyForm((form) => ({ ...form, asset: coin.symbol, price: "" }));
+      await refreshPrices();
+    } catch (error) {
+      setCoinError(error instanceof Error ? error.message : "Failed to add coin");
+    } finally {
+      setAddingCoin(false);
+    }
+  };
+
   const onExport = () => {
     const csv = toCsv(buys, sells);
     const blob = new Blob([csv], { type: "text/csv" });
@@ -334,11 +356,7 @@ export default function LedgerApp() {
     "sortable" + (sort.column === column ? ` ${sort.direction}` : "");
 
   const openBuys = buys.filter((b) => Number(b.remaining) > 0.000001);
-  const tickerItems = [
-    { label: "BTC", value: prices.BTC },
-    { label: "ETH", value: prices.ETH },
-    { label: "XAUT", value: prices.XAUT },
-  ];
+  const tickerItems = coins.map((coin) => ({ label: coin.symbol, value: prices[coin.symbol] ?? 0 }));
 
   return (
     <div className="container">
@@ -381,6 +399,11 @@ export default function LedgerApp() {
         <input ref={fileInputRef} type="file" accept=".csv" style={{ display: "none" }} onChange={onImportFile} />
       </header>
 
+      <div className="workspace-nav-bar">
+        <span className="workspace-nav-label">WORKSPACE</span>
+        <AppNav active="portfolio" />
+      </div>
+
       {/* TICKER */}
       <div className="ticker-wrap">
         <div className="ticker">
@@ -392,6 +415,16 @@ export default function LedgerApp() {
           ))}
         </div>
       </div>
+
+      {/* PORTFOLIO OVERVIEW */}
+      <PortfolioOverview
+        buys={buys}
+        prices={prices}
+        usd={usd}
+        realizedPnl={stats.realizedPnl}
+        unrealized={unrealized}
+        totalCost={stats.totalCost}
+      />
 
       {/* STATS GRID */}
       <div className="stats-grid">
@@ -468,17 +501,58 @@ export default function LedgerApp() {
           </div>
         </div>
         <div className="price-row">
-          {(["BTC", "ETH", "XAUT"] as Asset[]).map((asset) => (
-            <div className="price-tile" key={asset}>
-              <div className="price-asset">{asset}</div>
+          {coins.map((coin) => (
+            <div className="price-tile" key={coin.symbol}>
+              <div className="price-asset">{coin.symbol}</div>
               <div className="price-val">
-                <input type="text" value={prices[asset] > 0 ? prices[asset].toString() : "—"} readOnly />
+                <input
+                  type="text"
+                  value={prices[coin.symbol] > 0 ? prices[coin.symbol].toString() : "—"}
+                  readOnly
+                />
               </div>
-              <div className="price-label">
-                {asset === "BTC" ? "BITCOIN" : asset === "ETH" ? "ETHEREUM" : "TETHER GOLD"}
-              </div>
+              <div className="price-label">{coin.name.toUpperCase()}</div>
             </div>
           ))}
+        </div>
+      </div>
+
+      {/* MANAGE COINS */}
+      <div className="panel panel-coins">
+        <div className="panel-header">
+          <span className="panel-title">MANAGE COINS</span>
+          <span className="coin-count">{coins.length} ENABLED</span>
+        </div>
+        <div className="coins-body">
+          <div className="coin-list" aria-label="Enabled coins">
+            {coins.map((coin) => (
+              <div className="coin-chip" key={coin.symbol}>
+                <span className="coin-chip-symbol">{coin.symbol}</span>
+                <span className="coin-chip-name">{coin.name}</span>
+                {coin.builtIn && <span className="coin-chip-core">CORE</span>}
+              </div>
+            ))}
+          </div>
+          <form className="coin-form" onSubmit={onAddCoin}>
+            <div className="field coin-url-field">
+              <label htmlFor="coinUrl">COINGECKO COIN URL</label>
+              <input
+                id="coinUrl"
+                type="url"
+                value={coinUrl}
+                onChange={(e) => setCoinUrl(e.target.value)}
+                placeholder="https://www.coingecko.com/en/coins/solana"
+                required
+              />
+            </div>
+            <button className="btn-action btn-coin-action" type="submit" disabled={addingCoin}>
+              {addingCoin ? "FETCHING COIN..." : "+ ADD FROM URL"}
+            </button>
+          </form>
+          <div className="coin-help">
+            Paste the coin page URL. LEDGRS will fetch its symbol, name, and live USD price automatically.
+          </div>
+          {coinError && <div className="coin-error">{coinError}</div>}
         </div>
       </div>
 
@@ -513,9 +587,9 @@ export default function LedgerApp() {
                   value={buyForm.asset}
                   onChange={(e) => setBuyForm((f) => ({ ...f, asset: e.target.value }))}
                 >
-                  {ASSETS.map((a) => (
-                    <option key={a} value={a}>
-                      {a}
+                  {coins.map((coin) => (
+                    <option key={coin.symbol} value={coin.symbol}>
+                      {coin.symbol} — {coin.name}
                     </option>
                   ))}
                 </select>
@@ -803,6 +877,97 @@ export default function LedgerApp() {
 
       <div className="footnote">
         DATA STORED IN A DATABASE · LIVE PRICES VIA COINGECKO (SERVER-CACHED) · AUTO-REFRESH 10s
+      </div>
+    </div>
+  );
+}
+
+const ALLOC_COLORS: Record<string, string> = {
+  BTC: "var(--amber)",
+  ETH: "var(--cyan)",
+  XAUT: "var(--accent)",
+};
+
+function PortfolioOverview({
+  buys,
+  prices,
+  usd,
+  realizedPnl,
+  unrealized,
+  totalCost,
+}: {
+  buys: BuyWithRemaining[];
+  prices: PriceMap;
+  usd: number;
+  realizedPnl: number;
+  unrealized: number;
+  totalCost: number;
+}) {
+  const val = useMemo(() => portfolioValuation(buys, prices), [buys, prices]);
+  const totalEquity = usd + val.holdingsValue;
+  const totalPnl = realizedPnl + unrealized;
+  const returnPct = totalCost > 0 ? (totalPnl / totalCost) * 100 : 0;
+  const up = totalPnl >= 0;
+
+  return (
+    <div className="panel panel-overview">
+      <div className="panel-header">
+        <span className="panel-title">PORTFOLIO OVERVIEW</span>
+        <span className={`overview-return ${up ? "up" : "down"}`}>
+          {fmtSignedPct(returnPct)}
+          <span className="overview-return-sub">TOTAL RETURN</span>
+        </span>
+      </div>
+      <div className="overview-body">
+        <div className="overview-hero">
+          <div className="overview-hero-label">TOTAL EQUITY</div>
+          <div className="overview-hero-value">{fmtUsd(totalEquity)}</div>
+          <div className="overview-hero-breakdown">
+            <span>
+              <i style={{ background: "var(--accent)" }} />
+              HOLDINGS {fmtUsd(val.holdingsValue)}
+            </span>
+            <span>
+              <i style={{ background: "var(--amber)" }} />
+              CASH {fmtUsd(usd)}
+            </span>
+          </div>
+          <div className={`overview-pnl ${up ? "up" : "down"}`}>
+            {fmtSignedUsd(totalPnl)}
+            <span className="overview-pnl-sub">
+              UNREALIZED {fmtSignedUsd(unrealized)} · REALIZED {fmtSignedUsd(realizedPnl)}
+            </span>
+          </div>
+        </div>
+
+        <div className="overview-alloc">
+          <div className="overview-alloc-title">ASSET ALLOCATION</div>
+          {!val.priced || val.holdingsValue <= 0 ? (
+            <div className="overview-alloc-empty">No priced open positions yet.</div>
+          ) : (
+            val.byAsset
+              .filter((a) => a.value > 0)
+              .map((a) => {
+                const pct = (a.value / val.holdingsValue) * 100;
+                return (
+                  <div className="alloc-row" key={a.asset}>
+                    <div className="alloc-head">
+                      <span className="alloc-asset">{a.asset}</span>
+                      <span className="alloc-val">
+                        {fmtUsd(a.value)} · {pct.toFixed(1)}%
+                      </span>
+                    </div>
+                    <div className="alloc-bar">
+                      <div
+                        className="alloc-fill"
+                        style={{ width: `${pct}%`, background: ALLOC_COLORS[a.asset] ?? "var(--text-dim)" }}
+                      />
+                    </div>
+                  </div>
+                );
+              })
+          )}
+        </div>
       </div>
     </div>
   );
