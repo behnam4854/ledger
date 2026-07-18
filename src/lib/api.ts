@@ -5,6 +5,8 @@ import type {
   CandlesResponse,
   CoinDefinition,
   FuturesAccountResponse,
+  FuturesMarketResponse,
+  FuturesChartResponse,
   FuturesSide,
   Portfolio,
   PricesResponse,
@@ -53,6 +55,21 @@ export async function fetchFuturesAccount(): Promise<FuturesAccountResponse> {
   return jsonOrThrow<FuturesAccountResponse>(await fetch("/api/futures", { cache: "no-store" }));
 }
 
+export async function fetchFuturesMarket(): Promise<FuturesMarketResponse> {
+  return jsonOrThrow<FuturesMarketResponse>(
+    await fetch("/api/futures/market", { cache: "no-store" }),
+  );
+}
+
+export async function fetchFuturesChart(
+  asset: string,
+  interval: "1h" | "4h" | "1d",
+): Promise<FuturesChartResponse> {
+  return jsonOrThrow<FuturesChartResponse>(
+    await fetch(`/api/futures/market/history?asset=${encodeURIComponent(asset)}&interval=${interval}`, { cache: "no-store" }),
+  );
+}
+
 export async function openFuturesPosition(input: {
   asset: string;
   side: FuturesSide;
@@ -61,6 +78,12 @@ export async function openFuturesPosition(input: {
   entryPrice: string;
   stopLoss: string;
   takeProfit: string;
+  riskPercent: string;
+  feeRateBps: string;
+  fundingRate: string;
+  fundingIntervalHours: number;
+  maintenanceMarginRate: string;
+  autoCloseEnabled: boolean;
 }): Promise<void> {
   await jsonOrThrow(
     await fetch("/api/futures/positions", {
@@ -71,14 +94,77 @@ export async function openFuturesPosition(input: {
   );
 }
 
-export async function closeFuturesPosition(id: number, exitPrice: string): Promise<void> {
+export async function closeFuturesPosition(id: number, exitPrice: string, closeQuantity: string): Promise<void> {
   await jsonOrThrow(
     await fetch(`/api/futures/positions/${id}/close`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ exitPrice }),
+      body: JSON.stringify({ exitPrice, closeQuantity }),
     }),
   );
+}
+
+export async function adjustFuturesPosition(id: number, input: {
+  stopLoss: string;
+  takeProfit: string;
+  marginDelta: string;
+}): Promise<void> {
+  await jsonOrThrow(
+    await fetch(`/api/futures/positions/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    }),
+  );
+}
+
+export async function updateFuturesJournal(id: number, input: {
+  setup: string;
+  tags: string;
+  notes: string;
+  screenshot: string;
+}): Promise<void> {
+  await jsonOrThrow(
+    await fetch(`/api/futures/positions/${id}/journal`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    }),
+  );
+}
+
+export async function processFuturesTriggers(): Promise<{ executed: { id: number; reason: string; price: string }[] }> {
+  return jsonOrThrow(await fetch("/api/futures/triggers", { method: "POST" }));
+}
+
+export async function setFuturesAutomation(id: number, enabled: boolean): Promise<void> {
+  await jsonOrThrow(await fetch(`/api/futures/positions/${id}/automation`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ enabled }),
+  }));
+}
+
+export interface ClosedFuturesTradeInput {
+  side: FuturesSide;
+  leverage: number;
+  margin: string;
+  entryPrice: string;
+  exitPrice: string;
+  stopLoss: string;
+  takeProfit: string;
+  feeRateBps: string;
+  fundingRate: string;
+  openedAt: string;
+  closedAt: string;
+}
+
+export async function updateClosedFuturesTrade(id: number, input: ClosedFuturesTradeInput): Promise<void> {
+  await jsonOrThrow(await fetch(`/api/futures/positions/${id}/closed`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(input) }));
+}
+
+export async function deleteClosedFuturesTrade(id: number): Promise<void> {
+  await jsonOrThrow(await fetch(`/api/futures/positions/${id}/closed`, { method: "DELETE" }));
 }
 
 export async function fetchCandles(asset: Asset): Promise<CandlesResponse> {

@@ -1,0 +1,33 @@
+
+> ledgrs@1.0.0 dev
+> next dev
+
+   ▲ Next.js 15.5.19
+   - Local:        http://localhost:3000
+   - Network:      http://10.2.5.204:3000
+   - Environments: .env
+
+ ✓ Starting...
+ ✓ Ready in 3s
+ ✓ Compiled /middleware in 307ms (232 modules)
+ ○ Compiling /api/auth/[...nextauth] ...
+ ✓ Compiled /api/auth/[...nextauth] in 683ms (427 modules)
+ GET /api/auth/csrf 200 in 1698ms
+ POST /api/auth/callback/credentials 302 in 352ms
+ ○ Compiling /auth ...
+ ✓ Compiled /auth in 827ms (686 modules)
+ GET /auth?callbackUrl=http%3A%2F%2Flocalhost%3A3000%2F 200 in 1153ms
+ ✓ Compiled / in 431ms (767 modules)
+ GET / 200 in 762ms
+ ✓ Compiled /futures in 397ms (781 modules)
+ GET /futures 200 in 686ms
+ ✓ Compiled /api/futures in 289ms (783 modules)
+ GET /api/futures 200 in 436ms
+ ✓ Compiled /_not-found in 373ms (628 modules)
+ GET /futures 404 in 893ms
+ GET /futures 200 in 181ms
+ GET /sw.js 404 in 48ms
+ GET /sw.js 404 in 56ms
+ ○ Compiling /_error ...
+ ✓ Compiled /_error in 1910ms (975 modules)
+ GET /sw.js 404 in 2353ms

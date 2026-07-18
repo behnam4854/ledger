@@ -54,16 +54,53 @@ model FuturesPosition {
   leverage    Int
   margin      String    // isolated collateral in USD
   quantity    String    // asset units controlled by the position
+  initialQuantity String?
+  initialMargin String?
   entryPrice  String
   stopLoss    String?
   takeProfit  String?
+  riskPercent String?
+  plannedRisk String?
+  feeRateBps  String?   // fee charged on each side, in basis points
+  entryFee    String?
+  exitFee     String?
+  fundingRate String?   // signed percent per funding interval
+  fundingIntervalHours Int?
+  fundingPnl  String?
+  grossPnl    String?
+  maintenanceMarginRate String? // percent of current notional
+  journalSetup String?
+  journalTags String?
+  journalNotes String?
+  journalScreenshot String?
+  autoCloseEnabled Boolean @default(true)
+  closeReason String?
   status      String    @default("OPEN") // OPEN | CLOSED
   exitPrice   String?
   realizedPnl String?
   openedAt    DateTime  @default(now())
   closedAt    DateTime?
+  executions  FuturesExecution[]
 
   @@index([userId, status])
+}
+
+model FuturesExecution {
+  id              Int      @id @default(autoincrement())
+  positionId      Int
+  position        FuturesPosition @relation(fields: [positionId], references: [id], onDelete: Cascade)
+  quantity        String
+  exitPrice       String
+  allocatedMargin String
+  entryFee        String
+  exitFee         String
+  fundingPnl      String
+  grossPnl        String
+  realizedPnl     String
+  reason          String   @default("MANUAL")
+  closedAt        DateTime @default(now())
+
+  @@index([positionId, closedAt])
 }
 
 model Buy {

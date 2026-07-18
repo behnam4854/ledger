@@ -3,7 +3,8 @@
 // Unlike the original naive split(','), this parser handles quoted fields that
 // contain commas, escaped double-quotes ("") and surrounding whitespace.
 
-import type { BuyWithRemaining, Sell } from "./types";
+import { completedFundingIntervals, futuresFee, futuresFunding, futuresMetrics } from "./futures";
+import type { BuyWithRemaining, FuturesPosition, PriceMap, Sell } from "./types";
 import type { ImportPayload } from "./api";
 
 /** Parse a single CSV line into fields, honouring quotes. */
@@ -112,4 +113,165 @@ export function toCsv(buys: BuyWithRemaining[], sells: Sell[]): string {
   rows.sort((a, b) => (String(a[0]) < String(b[0]) ? -1 : 1));
 
   return [header, ...rows].map((r) => r.map(csvCell).join(",")).join("\n");
+}
+
+/** Export the full futures journal, including current metrics for open trades. */
+export function toFuturesCsv(positions: FuturesPosition[], prices: PriceMap): string {
+  const header = [
+    "Record Type",
+    "Position ID",
+    "Execution ID",
+    "Close Quantity",
+    "Status",
+    "Asset",
+    "Side",
+    "Leverage",
+    "Margin USD",
+    "Notional USD",
+    "Quantity",
+    "Entry Price USD",
+    "Mark Price USD",
+    "Stop Loss USD",
+    "Take Profit USD",
+    "Risk Percent",
+    "Planned Risk USD",
+    "Fee Rate Bps",
+    "Entry Fee USD",
+    "Exit Fee USD",
+    "Funding Rate Percent",
+    "Funding Interval Hours",
+    "Funding P&L USD",
+    "Gross P&L USD",
+    "Maintenance Margin Rate Percent",
+    "Maintenance Margin USD",
+    "Liquidation Price USD",
+    "Exit Price USD",
+    "Unrealized P&L USD",
+    "Realized P&L USD",
+    "ROE Percent",
+    "Opened At",
+    "Closed At",
+    "Journal Setup",
+    "Journal Tags",
+    "Journal Notes",
+    "Journal Screenshot",
+    "Close Reason",
+  ];
+
+  const positionRows = positions.map((position): (string | number)[] => {
+    const markPrice = position.status === "CLOSED"
+      ? Number(position.exitPrice ?? position.entryPrice)
+      : prices[position.asset] ?? Number(position.entryPrice);
+    const metrics = futuresMetrics({
+      side: position.side,
+      entryPrice: position.entryPrice,
+      markPrice,
+      margin: position.margin,
+      leverage: position.leverage,
+      quantity: position.quantity,
+      maintenanceMarginRatePercent: position.maintenanceMarginRate ?? "0.5",
+      exitFeeRateBps: position.feeRateBps ?? "0",
+    });
+    const intervals = position.status === "OPEN"
+      ? completedFundingIntervals(position.openedAt, Date.now(), position.fundingIntervalHours ?? 8)
+      : 0;
+    const fundingPnl = position.status === "OPEN"
+      ? futuresFunding({
+          notional: metrics.notional,
+          ratePercent: position.fundingRate ?? "0",
+          intervals,
+          side: position.side,
+        })
+      : position.fundingPnl ?? "0";
+    const exitFee = position.status === "OPEN"
+      ? futuresFee(Number(position.quantity) * markPrice, position.feeRateBps ?? "0")
+      : position.exitFee ?? "0";
+    const netOpenPnl = position.status === "OPEN"
+      ? Number(metrics.pnl) - Number(position.entryFee ?? 0) - Number(exitFee) + Number(fundingPnl)
+      : "";
+    return [
+      "POSITION",
+      position.id,
+      "",
+      "",
+      position.status,
+      position.asset,
+      position.side,
+      position.leverage,
+      position.margin,
+      metrics.notional,
+      position.quantity,
+      position.entryPrice,
+      markPrice,
+      position.stopLoss ?? "",
+      position.takeProfit ?? "",
+      position.riskPercent ?? "",
+      position.plannedRisk ?? "",
+      position.feeRateBps ?? "",
+      position.entryFee ?? "",
+      exitFee,
+      position.fundingRate ?? "",
+      position.fundingIntervalHours ?? "",
+      fundingPnl,
+      position.status === "OPEN" ? metrics.pnl : position.grossPnl ?? "",
+      position.maintenanceMarginRate ?? "0.5",
+      metrics.maintenanceMargin,
+      metrics.liquidationPrice,
+      position.exitPrice ?? "",
+      netOpenPnl,
+      position.realizedPnl ?? "",
+      position.status === "OPEN" ? metrics.roe : "",
+      position.openedAt,
+      position.closedAt ?? "",
+      position.journalSetup ?? "",
+      position.journalTags ?? "",
+      position.journalNotes ?? "",
+      position.journalScreenshot ?? "",
+      position.closeReason ?? "",
+    ];
+  });
+
+  const executionRows = positions.flatMap((position) => position.executions.map((execution): (string | number)[] => [
+    "EXECUTION",
+    position.id,
+    execution.id,
+    execution.quantity,
+    "CLOSE",
+    position.asset,
+    position.side,
+    position.leverage,
+    execution.allocatedMargin,
+    Number(execution.quantity) * Number(position.entryPrice),
+    execution.quantity,
+    position.entryPrice,
+    execution.exitPrice,
+    position.stopLoss ?? "",
+    position.takeProfit ?? "",
+    position.riskPercent ?? "",
+    "",
+    position.feeRateBps ?? "",
+    execution.entryFee,
+    execution.exitFee,
+    position.fundingRate ?? "",
+    position.fundingIntervalHours ?? "",
+    execution.fundingPnl,
+    execution.grossPnl,
+    position.maintenanceMarginRate ?? "0.5",
+    "",
+    "",
+    execution.exitPrice,
+    "",
+    execution.realizedPnl,
+    "",
+    position.openedAt,
+    execution.closedAt,
+    position.journalSetup ?? "",
+    position.journalTags ?? "",
+    position.journalNotes ?? "",
+    position.journalScreenshot ?? "",
+    execution.reason,
+  ]));
+  const rows = [...positionRows, ...executionRows];
+
+  return [header, ...rows].map((row) => row.map(csvCell).join(",")).join("\n");
 }

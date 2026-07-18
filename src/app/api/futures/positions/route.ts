@@ -2,7 +2,7 @@ import Decimal from "decimal.js";
 import { NextResponse, type NextRequest } from "next/server";
 import { auth } from "@/auth";
 import { DEFAULT_FUTURES_USD, FUTURES_USD_KEY, getUserCoins, prisma } from "@/lib/db";
-import { futuresMetrics, type FuturesSide } from "@/lib/futures";
+import { futuresFee, futuresMetrics, type FuturesSide } from "@/lib/futures";
 import { getPrices } from "@/lib/prices";
 
 export async function POST(req: NextRequest) {
@@ -49,6 +49,22 @@ export async function POST(req: NextRequest) {
   const entryPriceInput = parseOptionalPrice(body.entryPrice);
   const stopLoss = parseOptionalPrice(body.stopLoss);
   const takeProfit = parseOptionalPrice(body.takeProfit);
+  const riskPercent = parseOptionalPrice(body.riskPercent);
+  let feeRateBps: Decimal;
+  let fundingRate: Decimal;
+  try {
+    feeRateBps = new Decimal(String(body.feeRateBps ?? "5"));
+    fundingRate = new Decimal(String(body.fundingRate ?? "0.01"));
+  } catch {
+    return NextResponse.json({ error: "Enter valid fee and funding rates" }, { status: 400 });
+  }
+  const fundingIntervalHours = Number(body.fundingIntervalHours ?? 8);
+  let maintenanceMarginRate: Decimal;
+  try {
+    maintenanceMarginRate = new Decimal(String(body.maintenanceMarginRate ?? "0.5"));
+  } catch {
+    return NextResponse.json({ error: "Enter a valid maintenance-margin rate" }, { status: 400 });
+  }
   if (String(body.entryPrice ?? "").trim() && !entryPriceInput) {
     return NextResponse.json({ error: "Entry price must be greater than zero" }, { status: 400 });
   }
@@ -57,6 +73,24 @@ export async function POST(req: NextRequest) {
   }
   if (String(body.takeProfit ?? "").trim() && !takeProfit) {
     return NextResponse.json({ error: "Take-profit must be greater than zero" }, { status: 400 });
+  }
+  if (riskPercent && riskPercent.greaterThan(100)) {
+    return NextResponse.json({ error: "Risk percentage must be between 0 and 100" }, { status: 400 });
+  }
+  if (!feeRateBps.isFinite() || feeRateBps.isNegative() || feeRateBps.greaterThan(1000)) {
+    return NextResponse.json({ error: "Fee rate must be between 0 and 1,000 bps" }, { status: 400 });
+  }
+  if (!fundingRate.isFinite() || fundingRate.abs().greaterThan(10)) {
+    return NextResponse.json({ error: "Funding rate must be between -10% and 10%" }, { status: 400 });
+  }
+  if (!Number.isInteger(fundingIntervalHours) || fundingIntervalHours < 1 || fundingIntervalHours > 168) {
+    return NextResponse.json({ error: "Funding interval must be between 1 and 168 hours" }, { status: 400 });
+  }
+  if (!maintenanceMarginRate.isFinite() || maintenanceMarginRate.isNegative() || maintenanceMarginRate.greaterThanOrEqualTo(100)) {
+    return NextResponse.json({ error: "Maintenance margin must be between 0% and 100%" }, { status: 400 });
+  }
+  if (maintenanceMarginRate.plus(feeRateBps.div(100)).greaterThanOrEqualTo(100)) {
+    return NextResponse.json({ error: "Maintenance margin plus the closing fee must be below 100%" }, { status: 400 });
   }
 
   const coins = await getUserCoins(userId);
@@ -81,19 +115,29 @@ export async function POST(req: NextRequest) {
   if (side === "SHORT" && takeProfit && takeProfit.greaterThanOrEqualTo(entryPrice)) {
     return NextResponse.json({ error: "For a SHORT, take-profit must be below entry price" }, { status: 400 });
   }
-  const metrics = futuresMetrics({ side, entryPrice, markPrice: entryPrice, margin, leverage });
+  const metrics = futuresMetrics({
+    side,
+    entryPrice,
+    markPrice: entryPrice,
+    margin,
+    leverage,
+    maintenanceMarginRatePercent: maintenanceMarginRate,
+    exitFeeRateBps: feeRateBps,
+  });
+  const entryFee = new Decimal(futuresFee(metrics.notional, feeRateBps));
 
   const result = await prisma.$transaction(async (tx) => {
     const setting = await tx.setting.findUnique({
       where: { userId_key: { userId, key: FUTURES_USD_KEY } },
     });
     const balance = new Decimal(setting?.value ?? DEFAULT_FUTURES_USD);
-    if (margin.greaterThan(balance)) return { error: "Insufficient futures paper balance" } as const;
+    const openingCost = margin.plus(entryFee);
+    if (openingCost.greaterThan(balance)) return { error: "Insufficient balance for margin and entry fee" } as const;
 
     await tx.setting.upsert({
       where: { userId_key: { userId, key: FUTURES_USD_KEY } },
-      create: { userId, key: FUTURES_USD_KEY, value: balance.minus(margin).toString() },
-      update: { value: balance.minus(margin).toString() },
+      create: { userId, key: FUTURES_USD_KEY, value: balance.minus(openingCost).toString() },
+      update: { value: balance.minus(openingCost).toString() },
     });
     const position = await tx.futuresPosition.create({
       data: {
@@ -103,9 +147,21 @@ export async function POST(req: NextRequest) {
         leverage,
         margin: margin.toString(),
         quantity: metrics.quantity,
+        initialQuantity: metrics.quantity,
+        initialMargin: margin.toString(),
         entryPrice: entryPrice.toString(),
         stopLoss: stopLoss?.toString() ?? null,
         takeProfit: takeProfit?.toString() ?? null,
+        riskPercent: riskPercent?.toString() ?? null,
+        plannedRisk: stopLoss
+          ? new Decimal(metrics.quantity).times(entryPrice.minus(stopLoss).abs()).toString()
+          : null,
+        feeRateBps: feeRateBps.toString(),
+        entryFee: entryFee.toString(),
+        fundingRate: fundingRate.toString(),
+        fundingIntervalHours,
+        maintenanceMarginRate: maintenanceMarginRate.toString(),
+        autoCloseEnabled: body.autoCloseEnabled !== false,
       },
     });
     return { position } as const;

@@ -100,17 +100,71 @@ export interface FuturesPosition {
   leverage: number;
   margin: string;
   quantity: string;
+  initialQuantity: string | null;
+  initialMargin: string | null;
   entryPrice: string;
   stopLoss: string | null;
   takeProfit: string | null;
+  riskPercent: string | null;
+  plannedRisk: string | null;
+  feeRateBps: string | null;
+  entryFee: string | null;
+  exitFee: string | null;
+  fundingRate: string | null;
+  fundingIntervalHours: number | null;
+  fundingPnl: string | null;
+  grossPnl: string | null;
+  maintenanceMarginRate: string | null;
+  journalSetup: string | null;
+  journalTags: string | null;
+  journalNotes: string | null;
+  journalScreenshot: string | null;
+  autoCloseEnabled: boolean;
+  closeReason: string | null;
   status: "OPEN" | "CLOSED";
   exitPrice: string | null;
   realizedPnl: string | null;
   openedAt: string;
   closedAt: string | null;
+  executions: FuturesExecution[];
+}
+
+export interface FuturesExecution {
+  id: number;
+  quantity: string;
+  exitPrice: string;
+  allocatedMargin: string;
+  entryFee: string;
+  exitFee: string;
+  fundingPnl: string;
+  grossPnl: string;
+  realizedPnl: string;
+  reason: string;
+  closedAt: string;
 }
 
 export interface FuturesAccountResponse {
   balance: number;
   positions: FuturesPosition[];
+}
+
+export interface FuturesMarketQuote {
+  symbol: string;
+  exchangeSymbol: string | null;
+  markPrice: number;
+  indexPrice: number;
+  lastPrice: number;
+  fundingRate: number | null; // percent per interval
+  nextFundingTime: number | null;
+  source: "BINANCE_FUTURES" | "COINGECKO_FALLBACK";
+}
+
+export interface FuturesMarketResponse {
+  quotes: Record<string, FuturesMarketQuote>;
+  updatedAt: number;
+}
+
+export interface FuturesChartResponse {
+  candles: { time: number; close: number }[];
+  source: "BINANCE_FUTURES" | "COINGECKO_FALLBACK";
 }

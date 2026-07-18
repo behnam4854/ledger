@@ -1,8 +1,9 @@
 import Decimal from "decimal.js";
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { DEFAULT_FUTURES_USD, FUTURES_USD_KEY, getUserCoins, prisma } from "@/lib/db";
-import { futuresMetrics, type FuturesSide } from "@/lib/futures";
+import { getUserCoins, prisma } from "@/lib/db";
+import { closeFuturesPositionAtPrice, FuturesCloseError } from "@/lib/close-futures-position";
+import { getFuturesMarket } from "@/lib/futures-market";
 import { getPrices } from "@/lib/prices";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -21,6 +22,18 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   } catch {
     // An empty body means close at the current live mark.
   }
+  const closeQuantityText = String(body.closeQuantity ?? "").trim();
+  let requestedCloseQuantity: Decimal | null = null;
+  if (closeQuantityText) {
+    try {
+      requestedCloseQuantity = new Decimal(closeQuantityText);
+    } catch {
+      return NextResponse.json({ error: "Close quantity must be a number" }, { status: 400 });
+    }
+    if (!requestedCloseQuantity.isFinite() || requestedCloseQuantity.lessThanOrEqualTo(0)) {
+      return NextResponse.json({ error: "Close quantity must be greater than zero" }, { status: 400 });
+    }
+  }
   const exitText = String(body.exitPrice ?? "").trim();
   let manualExit: Decimal | null = null;
   if (exitText) {
@@ -38,45 +51,25 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (!exitPrice) {
     const coins = await getUserCoins(userId);
     const { prices } = await getPrices(coins);
-    const livePrice = prices[current.asset];
+    const market = await getFuturesMarket(coins, prices);
+    const livePrice = market.quotes[current.asset]?.markPrice ?? prices[current.asset];
     if (livePrice > 0) exitPrice = new Decimal(livePrice);
   }
   if (!exitPrice) {
     return NextResponse.json({ error: "Enter an exit price because no live market price is available" }, { status: 503 });
   }
 
-  const result = await prisma.$transaction(async (tx) => {
-    const position = await tx.futuresPosition.findFirst({ where: { id, userId, status: "OPEN" } });
-    if (!position) return { error: "Position is already closed" } as const;
-    const metrics = futuresMetrics({
-      side: position.side as FuturesSide,
-      entryPrice: position.entryPrice,
-      markPrice: exitPrice,
-      margin: position.margin,
-      leverage: position.leverage,
-      quantity: position.quantity,
+  try {
+    const result = await closeFuturesPositionAtPrice({
+      userId,
+      id,
+      exitPrice,
+      closeQuantity: requestedCloseQuantity ?? undefined,
+      reason: "MANUAL",
     });
-    const setting = await tx.setting.findUnique({
-      where: { userId_key: { userId, key: FUTURES_USD_KEY } },
-    });
-    const balance = new Decimal(setting?.value ?? DEFAULT_FUTURES_USD);
-    await tx.setting.upsert({
-      where: { userId_key: { userId, key: FUTURES_USD_KEY } },
-      create: { userId, key: FUTURES_USD_KEY, value: balance.plus(metrics.equity).toString() },
-      update: { value: balance.plus(metrics.equity).toString() },
-    });
-    await tx.futuresPosition.update({
-      where: { id },
-      data: {
-        status: "CLOSED",
-        exitPrice: exitPrice.toString(),
-        realizedPnl: metrics.pnl,
-        closedAt: new Date(),
-      },
-    });
-    return { pnl: metrics.pnl } as const;
-  });
-
-  if ("error" in result) return NextResponse.json({ error: result.error }, { status: 409 });
-  return NextResponse.json({ pnl: result.pnl });
+    return NextResponse.json(result);
+  } catch (error) {
+    if (error instanceof FuturesCloseError) return NextResponse.json({ error: error.message }, { status: error.status });
+    throw error;
+  }
 }
