@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { signOut, useSession } from "next-auth/react";
+import Decimal from "decimal.js";
 import AppNav from "../AppNav";
 import FuturesChart from "./FuturesChart";
 import FuturesAnalyticsPanel from "./FuturesAnalyticsPanel";
@@ -85,6 +86,7 @@ export default function FuturesApp() {
   const [closedEditId, setClosedEditId] = useState<number | null>(null);
   const [closedDraft, setClosedDraft] = useState<api.ClosedFuturesTradeInput | null>(null);
   const [error, setError] = useState("");
+  const [actionFeedback, setActionFeedback] = useState<{ tone: "success" | "error"; text: string } | null>(null);
 
   const loadAccount = useCallback(async () => {
     setAccount(await api.fetchFuturesAccount());
@@ -271,17 +273,33 @@ export default function FuturesApp() {
     setClosingId(id);
     try {
       const position = openPositions.find((item) => item.id === id);
+      if (!position) throw new Error("Open position not found. Refresh and try again.");
       const percent = closePercents[id] ?? 100;
-      const closeQuantity = position ? String(Number(position.quantity) * (percent / 100)) : "";
-      await api.closeFuturesPosition(id, exitPrices[id] ?? "", closeQuantity);
+      const closeQuantity = new Decimal(position.quantity).times(percent).div(100).toString();
+      const exitPrice = exitPrices[id]?.trim() || (position.markPrice > 0 ? String(position.markPrice) : "");
+      if (!exitPrice) throw new Error("Enter an exit price because no live mark is available.");
+      await api.closeFuturesPosition(id, exitPrice, closeQuantity);
       await loadAccount();
+      setActionFeedback({
+        tone: "success",
+        text: percent === 100
+          ? `${position.asset} position closed successfully.`
+          : `Closed ${fmtQty(closeQuantity)} ${position.asset} (${percent}%).`,
+      });
       setExitPrices((current) => {
         const next = { ...current };
         delete next[id];
         return next;
       });
+      setClosePercents((current) => {
+        const next = { ...current };
+        delete next[id];
+        return next;
+      });
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Could not close position");
+      const message = reason instanceof Error ? reason.message : "Could not close position";
+      setError(message);
+      setActionFeedback({ tone: "error", text: message });
     } finally {
       setClosingId(null);
     }
@@ -306,8 +324,11 @@ export default function FuturesApp() {
       await api.adjustFuturesPosition(id, draft);
       await loadAccount();
       setAdjustingId(null);
+      setActionFeedback({ tone: "success", text: "Position risk controls updated." });
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : "Could not adjust position");
+      const message = reason instanceof Error ? reason.message : "Could not adjust position";
+      setError(message);
+      setActionFeedback({ tone: "error", text: message });
     } finally {
       setSubmitting(false);
     }
@@ -472,6 +493,12 @@ export default function FuturesApp() {
       </div>
 
       {error && <div className="futures-error">{error}</div>}
+      {actionFeedback && (
+        <div className={`futures-toast ${actionFeedback.tone}`} role="status" aria-live="polite">
+          <span>{actionFeedback.text}</span>
+          <button type="button" aria-label="Dismiss status" onClick={() => setActionFeedback(null)}>×</button>
+        </div>
+      )}
 
       <div className="futures-workspace">
         <div className="panel futures-ticket">
@@ -623,36 +650,65 @@ export default function FuturesApp() {
           <table>
             <thead><tr><th>CONTRACT</th><th>SIDE</th><th>SIZE</th><th>ENTRY</th><th>MARK</th><th>SL / TP</th><th>LIQ. PRICE</th><th>MARGIN</th><th>NET PNL / ROE</th><th>LOG EXIT</th></tr></thead>
             <tbody>
-              {openPositions.map((position) => (
+              {openPositions.map((position) => {
+                const closePercent = closePercents[position.id] ?? 100;
+                const closeQuantity = Number(position.quantity) * (closePercent / 100);
+
+                return (
                 <tr key={position.id} className={position.liquidated ? "liquidation-row" : ""}>
-                  <td><b>{position.asset}/USD</b><small>{position.leverage}x ISOLATED</small>{position.autoCloseEnabled && <span className="trigger-badge take">AUTO SL/TP</span>}{position.stopHit && <span className="trigger-badge stop">SL HIT</span>}{position.takeHit && <span className="trigger-badge take">TP HIT</span>}</td>
-                  <td><span className={`futures-side ${position.side.toLowerCase()}`}>{position.side}</span></td>
-                  <td>{fmtUsd(position.notional)}<small>{fmtQty(position.quantity)} {position.asset}</small></td>
-                  <td>{fmtUsd(Number(position.entryPrice))}</td>
-                  <td>{fmtUsd(position.markPrice)}</td>
-                  <td className="risk-levels"><span>SL {position.stopLoss ? fmtUsd(Number(position.stopLoss)) : "—"}</span><span>TP {position.takeProfit ? fmtUsd(Number(position.takeProfit)) : "—"}</span></td>
-                  <td className="liq-price">{fmtUsd(position.liquidationPrice)}<small>{position.liquidationDistancePercent.toFixed(2)}% AWAY · MM {fmtUsd(position.maintenanceMargin)}</small>{position.liquidated && <small>LIQUIDATED</small>}</td>
-                  <td>{fmtUsd(Number(position.margin))}{position.plannedRisk && <small>RISK {fmtUsd(Number(position.plannedRisk))}{position.riskPercent ? ` · ${position.riskPercent}%` : ""}</small>}</td>
-                  <td className={position.pnl >= 0 ? "profit-positive" : "profit-negative"}>{fmtSignedUsd(position.pnl)}<small>{fmtSignedPct(position.roe)} · GROSS {fmtSignedUsd(position.liveGrossPnl)}</small><small>FUNDING {fmtSignedUsd(position.accruedFundingPnl)} · FEES {fmtUsd(Number(position.entryFee ?? 0) + position.estimatedExitFee)}</small></td>
-                  <td>
+                  <td data-label="CONTRACT"><b>{position.asset}/USD</b><small>{position.leverage}x ISOLATED</small>{position.autoCloseEnabled && <span className="trigger-badge take">AUTO SL/TP</span>}{position.stopHit && <span className="trigger-badge stop">SL HIT</span>}{position.takeHit && <span className="trigger-badge take">TP HIT</span>}</td>
+                  <td data-label="SIDE"><span className={`futures-side ${position.side.toLowerCase()}`}>{position.side}</span></td>
+                  <td data-label="SIZE">{fmtUsd(position.notional)}<small>{fmtQty(position.quantity)} {position.asset}</small></td>
+                  <td data-label="ENTRY">{fmtUsd(Number(position.entryPrice))}</td>
+                  <td data-label="MARK">{fmtUsd(position.markPrice)}</td>
+                  <td data-label="SL / TP" className="risk-levels"><span>SL {position.stopLoss ? fmtUsd(Number(position.stopLoss)) : "—"}</span><span>TP {position.takeProfit ? fmtUsd(Number(position.takeProfit)) : "—"}</span></td>
+                  <td data-label="LIQ. PRICE" className="liq-price">{fmtUsd(position.liquidationPrice)}<small>{position.liquidationDistancePercent.toFixed(2)}% AWAY · MM {fmtUsd(position.maintenanceMargin)}</small>{position.liquidated && <small>LIQUIDATED</small>}</td>
+                  <td data-label="MARGIN">{fmtUsd(Number(position.margin))}{position.plannedRisk && <small>RISK {fmtUsd(Number(position.plannedRisk))}{position.riskPercent ? ` · ${position.riskPercent}%` : ""}</small>}</td>
+                  <td data-label="NET PNL / ROE" className={position.pnl >= 0 ? "profit-positive" : "profit-negative"}>{fmtSignedUsd(position.pnl)}<small>{fmtSignedPct(position.roe)} · GROSS {fmtSignedUsd(position.liveGrossPnl)}</small><small>FUNDING {fmtSignedUsd(position.accruedFundingPnl)} · FEES {fmtUsd(Number(position.entryFee ?? 0) + position.estimatedExitFee)}</small></td>
+                  <td data-label="POSITION ACTIONS" className="position-actions-cell">
                     <div className="exit-price-control">
-                      <input aria-label={`Exit price for ${position.asset}`} type="number" min="0" step="any" value={exitPrices[position.id] ?? ""} onChange={(event) => setExitPrices((current) => ({ ...current, [position.id]: event.target.value }))} placeholder={position.markPrice > 0 ? String(position.markPrice) : "Exit price"} />
-                      <select aria-label={`Close percentage for ${position.asset}`} value={closePercents[position.id] ?? 100} onChange={(event) => setClosePercents((current) => ({ ...current, [position.id]: Number(event.target.value) }))}><option value={25}>25%</option><option value={50}>50%</option><option value={75}>75%</option><option value={100}>100%</option></select>
-                      <button className="btn-ghost btn-sm" disabled={closingId === position.id} onClick={() => closePosition(position.id)}>{closingId === position.id ? "CLOSING" : `CLOSE ${closePercents[position.id] ?? 100}%`}</button>
-                      <button className="btn-ghost btn-sm" onClick={() => toggleAdjustment(position)}>{adjustingId === position.id ? "CANCEL" : "ADJUST"}</button>
+                      <label className="exit-price-field"><span>EXIT PRICE</span><input aria-label={`Exit price for ${position.asset}`} type="number" min="0" step="any" value={exitPrices[position.id] ?? ""} onChange={(event) => setExitPrices((current) => ({ ...current, [position.id]: event.target.value }))} placeholder={position.markPrice > 0 ? String(position.markPrice) : "Exit price"} /></label>
+                      <div className="close-size-control">
+                        <div className="close-size-value" aria-live="polite">
+                          <span>CLOSING AMOUNT</span>
+                          <b>{fmtQty(closeQuantity)} {position.asset}</b>
+                          <strong>{closePercent}%</strong>
+                        </div>
+                        <input
+                          aria-label={`Close amount for ${position.asset}`}
+                          aria-valuetext={`${fmtQty(closeQuantity)} ${position.asset}, ${closePercent}%`}
+                          className="close-size-slider"
+                          type="range"
+                          min="1"
+                          max="100"
+                          step="1"
+                          value={closePercent}
+                          onChange={(event) => setClosePercents((current) => ({ ...current, [position.id]: Number(event.target.value) }))}
+                          style={{ "--close-size": `${closePercent}%` } as React.CSSProperties}
+                        />
+                        <div className="close-size-marks"><span>1%</span><span>50%</span><span>100%</span></div>
+                      </div>
+                      <div className="position-action-buttons">
+                        <button className="btn-ghost btn-sm close-position-button" disabled={closingId === position.id} onClick={() => closePosition(position.id)}>{closingId === position.id ? "CLOSING…" : `CLOSE ${closePercent}%`}</button>
+                        <button className="btn-ghost btn-sm" onClick={() => toggleAdjustment(position)}>{adjustingId === position.id ? "CANCEL" : "ADJUST"}</button>
+                      </div>
                       <button className="btn-ghost btn-sm" onClick={() => toggleAutomation(position)}>{position.autoCloseEnabled ? "AUTO ON" : "AUTO OFF"}</button>
                     </div>
                     {adjustingId === position.id && (
                       <div className="position-adjustment">
-                        <label>SL<input type="number" min="0" step="any" value={adjustments[position.id]?.stopLoss ?? ""} onChange={(event) => setAdjustments((current) => ({ ...current, [position.id]: { ...current[position.id], stopLoss: event.target.value } }))} /></label>
-                        <label>TP<input type="number" min="0" step="any" value={adjustments[position.id]?.takeProfit ?? ""} onChange={(event) => setAdjustments((current) => ({ ...current, [position.id]: { ...current[position.id], takeProfit: event.target.value } }))} /></label>
-                        <label>MARGIN +/-<input type="number" step="any" value={adjustments[position.id]?.marginDelta ?? "0"} onChange={(event) => setAdjustments((current) => ({ ...current, [position.id]: { ...current[position.id], marginDelta: event.target.value } }))} /></label>
-                        <button className="btn-action btn-sm" disabled={submitting} onClick={() => saveAdjustment(position.id)}>SAVE</button>
+                        <div className="position-adjustment-head"><div><b>ADJUST POSITION</b><span>Update protection levels or isolated collateral.</span></div></div>
+                        <div className="position-adjustment-grid">
+                          <label><span>STOP-LOSS</span><input type="number" min="0" step="any" placeholder="Not set" value={adjustments[position.id]?.stopLoss ?? ""} onChange={(event) => setAdjustments((current) => ({ ...current, [position.id]: { ...current[position.id], stopLoss: event.target.value } }))} /></label>
+                          <label><span>TAKE-PROFIT</span><input type="number" min="0" step="any" placeholder="Not set" value={adjustments[position.id]?.takeProfit ?? ""} onChange={(event) => setAdjustments((current) => ({ ...current, [position.id]: { ...current[position.id], takeProfit: event.target.value } }))} /></label>
+                          <label><span>MARGIN CHANGE</span><input type="number" step="any" value={adjustments[position.id]?.marginDelta ?? "0"} onChange={(event) => setAdjustments((current) => ({ ...current, [position.id]: { ...current[position.id], marginDelta: event.target.value } }))} /><small>Use a negative value to remove margin.</small></label>
+                        </div>
+                        <div className="position-adjustment-footer"><button className="adjustment-save-button" disabled={submitting} onClick={() => saveAdjustment(position.id)}>{submitting ? "SAVING…" : "SAVE CHANGES"}</button></div>
                       </div>
                     )}
                   </td>
                 </tr>
-              ))}
+                );
+              })}
               {openPositions.length === 0 && <tr><td colSpan={10} className="empty-positions">No open paper futures positions.</td></tr>}
             </tbody>
           </table>
@@ -673,7 +729,7 @@ export default function FuturesApp() {
             <tbody>
               {closedPositions.map((position) => {
                 const pnl = Number(position.realizedPnl ?? 0);
-                return <tr key={position.id}><td><b>{position.asset}/USD</b><small>{position.closeReason?.replaceAll("_", " ") ?? "MANUAL"}</small></td><td><span className={`futures-side ${position.side.toLowerCase()}`}>{position.side}</span></td><td>{position.leverage}x</td><td>{fmtUsd(Number(position.entryPrice))}</td><td className="risk-levels"><span>SL {position.stopLoss ? fmtUsd(Number(position.stopLoss)) : "—"}</span><span>TP {position.takeProfit ? fmtUsd(Number(position.takeProfit)) : "—"}</span></td><td>{position.exitPrice ? fmtUsd(Number(position.exitPrice)) : "—"}<small>{position.executions.length} FILL{position.executions.length === 1 ? "" : "S"}</small></td><td className={pnl >= 0 ? "profit-positive" : "profit-negative"}>{fmtSignedUsd(pnl)}<small>GROSS {fmtSignedUsd(Number(position.grossPnl ?? position.realizedPnl ?? 0))}</small><small>FUNDING {fmtSignedUsd(Number(position.fundingPnl ?? 0))} · FEES {fmtUsd(Number(position.entryFee ?? 0) + Number(position.exitFee ?? 0))}</small></td><td>{position.closedAt ? new Date(position.closedAt).toLocaleString() : "—"}</td><td><div className="closed-trade-actions"><button className="btn-ghost btn-sm" onClick={() => editClosedTrade(position)}>EDIT</button><button className="btn-ghost btn-sm danger-action" onClick={() => deleteClosedTrade(position)}>DELETE</button></div></td></tr>;
+                return <tr key={position.id}><td data-label="CONTRACT"><b>{position.asset}/USD</b><small>{position.closeReason?.replaceAll("_", " ") ?? "MANUAL"}</small></td><td data-label="SIDE"><span className={`futures-side ${position.side.toLowerCase()}`}>{position.side}</span></td><td data-label="LEVERAGE">{position.leverage}x</td><td data-label="ENTRY">{fmtUsd(Number(position.entryPrice))}</td><td data-label="SL / TP" className="risk-levels"><span>SL {position.stopLoss ? fmtUsd(Number(position.stopLoss)) : "—"}</span><span>TP {position.takeProfit ? fmtUsd(Number(position.takeProfit)) : "—"}</span></td><td data-label="EXIT">{position.exitPrice ? fmtUsd(Number(position.exitPrice)) : "—"}<small>{position.executions.length} FILL{position.executions.length === 1 ? "" : "S"}</small></td><td data-label="NET REALIZED" className={pnl >= 0 ? "profit-positive" : "profit-negative"}>{fmtSignedUsd(pnl)}<small>GROSS {fmtSignedUsd(Number(position.grossPnl ?? position.realizedPnl ?? 0))}</small><small>FUNDING {fmtSignedUsd(Number(position.fundingPnl ?? 0))} · FEES {fmtUsd(Number(position.entryFee ?? 0) + Number(position.exitFee ?? 0))}</small></td><td data-label="CLOSED">{position.closedAt ? new Date(position.closedAt).toLocaleString() : "—"}</td><td data-label="ACTIONS"><div className="closed-trade-actions"><button className="btn-ghost btn-sm" onClick={() => editClosedTrade(position)}>EDIT</button><button className="btn-ghost btn-sm danger-action" onClick={() => deleteClosedTrade(position)}>DELETE</button></div></td></tr>;
               })}
               {closedPositions.length === 0 && <tr><td colSpan={9} className="empty-positions">Closed positions will appear here.</td></tr>}
             </tbody>
