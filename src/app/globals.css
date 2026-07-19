@@ -1319,6 +1319,13 @@ button:disabled { opacity: 0.35; cursor: not-allowed; }
   margin-bottom: 16px;
 }
 
+/* Live prices still power valuation and P&L, but are not shown as a separate
+   wall of cards on the portfolio workspace. */
+.container:not(.futures-page) .ticker-wrap,
+.container:not(.futures-page) .panel-prices {
+  display: none;
+}
+
 .coin-count {
   font-family: var(--mono);
   font-size: 0.6rem;
@@ -1370,7 +1377,56 @@ button:disabled { opacity: 0.35; cursor: not-allowed; }
   align-items: end;
 }
 
-.coin-url-field { min-width: 0; }
+.coin-search-field {
+  position: relative;
+  min-width: 0;
+}
+
+.coin-search-status {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  color: var(--text-dim);
+  font: 0.52rem var(--mono);
+  letter-spacing: 0.08em;
+  pointer-events: none;
+}
+
+.coin-search-results {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 5px);
+  right: 0;
+  left: 0;
+  max-height: 260px;
+  overflow-y: auto;
+  border: 1px solid var(--border2);
+  border-radius: 4px;
+  background: var(--bg1);
+  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.45);
+}
+
+.coin-search-result {
+  display: grid;
+  grid-template-columns: minmax(55px, auto) minmax(0, 1fr) auto;
+  align-items: center;
+  width: 100%;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.coin-search-result:last-child { border-bottom: 0; }
+.coin-search-result:hover,
+.coin-search-result:focus-visible { background: var(--bg2); outline: none; }
+.coin-search-symbol { color: var(--accent); font: 700 0.7rem var(--mono); }
+.coin-search-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.72rem; }
+.coin-search-rank { color: var(--text-dim); font: 0.55rem var(--mono); }
 
 .btn-coin-action {
   width: auto;
@@ -2278,6 +2334,8 @@ button:disabled { opacity: 0.35; cursor: not-allowed; }
   .coin-chip { min-width: 0; max-width: 100%; padding: 0.4rem 0.5rem; }
   .coin-chip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .coin-help { font-size: 0.55rem; }
+  .coin-search-result { min-height: 44px; padding: 0.65rem 0.7rem; }
+  .coin-search-results { max-height: 220px; }
 
   .forms-row { gap: 0.8rem; margin-bottom: 0.8rem; }
   .collapsible-content { padding: 0.75rem; }

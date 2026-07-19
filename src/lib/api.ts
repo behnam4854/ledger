@@ -36,12 +36,27 @@ export async function fetchCoins(): Promise<CoinDefinition[]> {
   return data.coins;
 }
 
-export async function addCoin(url: string): Promise<CoinDefinition> {
+export interface CoinSearchResult {
+  id: string;
+  symbol: string;
+  name: string;
+  rank: number | null;
+  thumb: string | null;
+}
+
+export async function searchCoins(query: string): Promise<CoinSearchResult[]> {
+  const data = await jsonOrThrow<{ coins: CoinSearchResult[] }>(
+    await fetch(`/api/coins/search?q=${encodeURIComponent(query)}`, { cache: "no-store" }),
+  );
+  return data.coins;
+}
+
+export async function addCoin(coingeckoId: string): Promise<CoinDefinition> {
   const data = await jsonOrThrow<{ coin: CoinDefinition }>(
     await fetch("/api/coins", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url }),
+      body: JSON.stringify({ coingeckoId }),
     }),
   );
   return data.coin;

@@ -6,23 +6,7 @@ import { fetchCoinGeckoCoin } from "@/lib/prices";
 import { CORE_COINS } from "@/lib/types";
 
 const SYMBOL_RE = /^[A-Z0-9._-]{1,15}$/;
-
-function coinGeckoIdFromUrl(value: string): string | null {
-  try {
-    const url = new URL(value.trim());
-    const hostname = url.hostname.toLowerCase().replace(/^www\./, "");
-    if ((url.protocol !== "https:" && url.protocol !== "http:") || hostname !== "coingecko.com") {
-      return null;
-    }
-    const parts = url.pathname.split("/").filter(Boolean);
-    const coinsIndex = parts.indexOf("coins");
-    if ((coinsIndex !== 0 && coinsIndex !== 1) || parts.length !== coinsIndex + 2) return null;
-    const id = parts[coinsIndex + 1].toLowerCase();
-    return /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(id) ? id : null;
-  } catch {
-    return null;
-  }
-}
+const COINGECKO_ID_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 export async function GET() {
   const session = await auth();
@@ -42,12 +26,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const coingeckoId = coinGeckoIdFromUrl(String(body.url ?? ""));
-  if (!coingeckoId) {
-    return NextResponse.json(
-      { error: "Paste a full CoinGecko coin URL, for example https://www.coingecko.com/en/coins/solana" },
-      { status: 400 },
-    );
+  const coingeckoId = String(body.coingeckoId ?? "").trim().toLowerCase();
+  if (!COINGECKO_ID_RE.test(coingeckoId)) {
+    return NextResponse.json({ error: "Choose a coin from the search results" }, { status: 400 });
   }
 
   let verified: Awaited<ReturnType<typeof fetchCoinGeckoCoin>>;
@@ -57,7 +38,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Could not verify the coin with CoinGecko. Try again shortly." }, { status: 502 });
   }
   if (!verified) {
-    return NextResponse.json({ error: "CoinGecko could not find that coin or a USD price for it" }, { status: 400 });
+    return NextResponse.json({ error: "CoinGecko could not verify that coin" }, { status: 400 });
   }
 
   const { symbol, name } = verified;

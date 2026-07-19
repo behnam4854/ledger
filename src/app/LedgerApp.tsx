@@ -44,7 +44,7 @@ export default function LedgerApp() {
   const [prices, setPrices] = useState<PriceMap>(EMPTY_PRICES);
   const [coins, setCoins] = useState<CoinDefinition[]>(CORE_COINS);
   const [priceStatus, setPriceStatus] = useState<"live" | "offline" | "fetching">("fetching");
-  const [priceTime, setPriceTime] = useState<string>("");
+  const [priceTime, setPriceTime] = useState("");
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [clock, setClock] = useState("--:--:--");
 
@@ -53,7 +53,10 @@ export default function LedgerApp() {
   const [sellForm, setSellForm] = useState({ buyId: "", amount: "", price: "", date: "" });
   const [buyCollapsed, setBuyCollapsed] = useState(true);
   const [sellCollapsed, setSellCollapsed] = useState(true);
-  const [coinUrl, setCoinUrl] = useState("");
+  const [coinQuery, setCoinQuery] = useState("");
+  const [coinResults, setCoinResults] = useState<api.CoinSearchResult[]>([]);
+  const [selectedCoin, setSelectedCoin] = useState<api.CoinSearchResult | null>(null);
+  const [searchingCoins, setSearchingCoins] = useState(false);
   const [addingCoin, setAddingCoin] = useState(false);
   const [coinError, setCoinError] = useState("");
 
@@ -67,12 +70,11 @@ export default function LedgerApp() {
 
   const [usdInput, setUsdInput] = useState("1000");
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const autoRefreshRef = useRef(autoRefresh);
-  autoRefreshRef.current = autoRefresh;
 
   const buys = portfolio?.buys ?? [];
   const sells = portfolio?.sells ?? [];
   const usd = portfolio?.usd ?? 0;
+  const enabledCoinIds = useMemo(() => coins.map((coin) => coin.coingeckoId).sort().join(","), [coins]);
 
   const reload = useCallback(async () => {
     try {
@@ -94,7 +96,8 @@ export default function LedgerApp() {
       } else {
         setPriceStatus("offline");
       }
-    } catch {
+    } catch (error) {
+      console.error(error);
       setPriceStatus("offline");
     }
   }, []);
@@ -109,11 +112,42 @@ export default function LedgerApp() {
 
   // Price polling
   useEffect(() => {
-    const id = setInterval(() => {
-      if (autoRefreshRef.current) refreshPrices();
-    }, 10_000);
+    const id = setInterval(refreshPrices, 10_000);
     return () => clearInterval(id);
   }, [refreshPrices]);
+
+  // Debounced CoinGecko search for the asset picker.
+  useEffect(() => {
+    const query = coinQuery.trim();
+    if (selectedCoin || query.length < 2) {
+      setCoinResults([]);
+      setSearchingCoins(false);
+      return;
+    }
+
+    let active = true;
+    const enabledIds = new Set(enabledCoinIds.split(",").filter(Boolean));
+    setCoinError("");
+    setSearchingCoins(true);
+    const id = setTimeout(async () => {
+      try {
+        const results = await api.searchCoins(query);
+        if (active) setCoinResults(results.filter((result) => !enabledIds.has(result.id)));
+      } catch (error) {
+        if (active) {
+          setCoinResults([]);
+          setCoinError(error instanceof Error ? error.message : "Coin search failed");
+        }
+      } finally {
+        if (active) setSearchingCoins(false);
+      }
+    }, 300);
+
+    return () => {
+      active = false;
+      clearTimeout(id);
+    };
+  }, [coinQuery, enabledCoinIds, selectedCoin]);
 
   // Clock
   useEffect(() => {
@@ -304,10 +338,16 @@ export default function LedgerApp() {
   const onAddCoin = async (e: React.FormEvent) => {
     e.preventDefault();
     setCoinError("");
+    if (!selectedCoin) {
+      setCoinError("Search for a coin and choose one of the verified results");
+      return;
+    }
     setAddingCoin(true);
     try {
-      const coin = await api.addCoin(coinUrl);
-      setCoinUrl("");
+      const coin = await api.addCoin(selectedCoin.id);
+      setCoinQuery("");
+      setSelectedCoin(null);
+      setCoinResults([]);
       setBuyForm((form) => ({ ...form, asset: coin.symbol, price: "" }));
       await refreshPrices();
     } catch (error) {
@@ -521,7 +561,6 @@ export default function LedgerApp() {
       <div className="panel panel-coins">
         <div className="panel-header">
           <span className="panel-title">MANAGE COINS</span>
-          <span className="coin-count">{coins.length} ENABLED</span>
         </div>
         <div className="coins-body">
           <div className="coin-list" aria-label="Enabled coins">
@@ -534,24 +573,53 @@ export default function LedgerApp() {
             ))}
           </div>
           <form className="coin-form" onSubmit={onAddCoin}>
-            <div className="field coin-url-field">
-              <label htmlFor="coinUrl">COINGECKO COIN URL</label>
+            <div className="field coin-search-field">
+              <label htmlFor="coinSearch">FIND A COIN</label>
               <input
-                id="coinUrl"
-                type="url"
-                value={coinUrl}
-                onChange={(e) => setCoinUrl(e.target.value)}
-                placeholder="https://www.coingecko.com/en/coins/solana"
-                required
+                id="coinSearch"
+                type="search"
+                role="combobox"
+                aria-expanded={coinResults.length > 0}
+                aria-controls="coin-search-results"
+                aria-autocomplete="list"
+                value={coinQuery}
+                onChange={(e) => {
+                  setCoinQuery(e.target.value);
+                  setSelectedCoin(null);
+                  setCoinError("");
+                }}
+                placeholder="Search by name or symbol"
+                autoComplete="off"
               />
+              {searchingCoins && <span className="coin-search-status">SEARCHING...</span>}
+              {coinResults.length > 0 && (
+                <div className="coin-search-results" id="coin-search-results" role="listbox">
+                  {coinResults.map((result) => (
+                    <button
+                      key={result.id}
+                      type="button"
+                      className="coin-search-result"
+                      role="option"
+                      aria-selected={false}
+                      onClick={() => {
+                        setSelectedCoin(result);
+                        setCoinQuery(`${result.name} (${result.symbol})`);
+                        setCoinResults([]);
+                      }}
+                    >
+                      <span className="coin-search-symbol">{result.symbol}</span>
+                      <span className="coin-search-name">{result.name}</span>
+                      <span className="coin-search-rank">{result.rank ? `#${result.rank}` : "UNRANKED"}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
-            <button className="btn-action btn-coin-action" type="submit" disabled={addingCoin}>
-              {addingCoin ? "FETCHING COIN..." : "+ ADD FROM URL"}
+            <button className="btn-action btn-coin-action" type="submit" disabled={addingCoin || !selectedCoin}>
+              {addingCoin ? "ADDING..." : "+ ADD COIN"}
             </button>
           </form>
-          <div className="coin-help">
-            Paste the coin page URL. LEDGRS will fetch its symbol, name, and live USD price automatically.
-          </div>
+          <div className="coin-help">Search by coin name or ticker, then choose the verified CoinGecko result.</div>
           {coinError && <div className="coin-error">{coinError}</div>}
         </div>
       </div>
