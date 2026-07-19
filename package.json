@@ -6,12 +6,14 @@
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && next build",
+    "build:vercel": "prisma generate --schema prisma/postgres/schema.prisma && prisma migrate deploy --schema prisma/postgres/schema.prisma && next build",
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
     "db:reset": "prisma db push --force-reset && tsx prisma/seed.ts",
+    "db:deploy:postgres": "prisma migrate deploy --schema prisma/postgres/schema.prisma",
     "postinstall": "prisma generate"
   },
   "dependencies": {

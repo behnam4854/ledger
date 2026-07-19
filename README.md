@@ -10,7 +10,7 @@ real database, a server-side price service, and an HTTP API.
 |--------------|------------------------------------------|-----|
 | Framework    | **Next.js 15** (App Router) + React 19   | One codebase for UI + API; deploys to Vercel in one click |
 | Language     | **TypeScript**                           | Type safety the original vanilla JS lacked |
-| Database     | **Prisma ORM** + **SQLite** (dev)        | Zero-config locally; swap to Postgres for production with a one-line change |
+| Database     | **Prisma ORM** + SQLite/PostgreSQL       | SQLite locally; durable PostgreSQL on Vercel |
 | Money math   | **decimal.js**                           | Exact decimal arithmetic — no floating-point drift |
 | Prices       | Server-side cached **CoinGecko** fetch   | One upstream call serves all users; API key never reaches the browser |
 
@@ -18,7 +18,8 @@ real database, a server-side price service, and an HTTP API.
 
 ```
 prisma/
-  schema.prisma        # Buy / Sell / Setting models (money stored as decimal strings)
+  schema.prisma        # Local SQLite schema
+  postgres/            # Production PostgreSQL schema and migrations
   seed.ts              # Demo portfolio
 src/
   lib/
@@ -47,25 +48,16 @@ Other scripts: `npm run build`, `npm run start`, `npm run typecheck`, `npm run d
 
 ## Deploying to production
 
-1. **Database** — provision managed Postgres (Neon, Supabase, Railway…).
-2. In `prisma/schema.prisma` set `provider = "postgresql"`.
-3. Set `DATABASE_URL` to the Postgres connection string in your host's env vars.
-4. Run `npx prisma migrate deploy` (use migrations instead of `db push` in prod).
-5. Deploy the app to **Vercel** (or any Node host); `npm run build` runs
-   `prisma generate` automatically.
+1. In Vercel, open **Storage**, create a Prisma Postgres (or Neon Postgres)
+   database, and connect it to this project.
+2. Confirm the integration created a production `DATABASE_URL` beginning with
+   `postgresql://` or `postgres://`.
+3. Add `AUTH_SECRET` and `AUTH_URL=https://your-project.vercel.app` to the
+   Production environment variables.
+4. Redeploy. `vercel.json` runs `npm run build:vercel`, which generates the
+   PostgreSQL client and applies checked-in migrations before Next.js builds.
 
-No application code changes are needed to switch databases — money is stored as
-decimal strings, so it's portable across engines.
-
-## Roadmap (to make it truly multi-user)
-
-The app is currently single-tenant (one shared portfolio). The next step for a
-real product is **authentication + per-user data**:
-
-- Add a managed auth provider (Clerk, Auth0, or Supabase Auth).
-- Add a `userId` column to `Buy` / `Sell` / `Setting` and scope every query to
-  the signed-in user.
-- Protect the API routes with the session.
-
-The data and calculation layers are already structured to make that change
-localized to the API routes.
+Local development remains unchanged and continues to use SQLite through
+`prisma/schema.prisma`. Never put the production connection string in a tracked
+file. The application already uses credentials authentication and user-scoped
+data.

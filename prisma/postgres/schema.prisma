@@ -1,0 +1,147 @@
+// Production schema for Vercel. Local development continues to use
+// prisma/schema.prisma with SQLite.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id               Int               @id @default(autoincrement())
+  email            String            @unique
+  password         String
+  createdAt        DateTime          @default(now())
+  buys             Buy[]
+  sells            Sell[]
+  settings         Setting[]
+  coins            Coin[]
+  futuresPositions FuturesPosition[]
+}
+
+model Coin {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  symbol      String
+  name        String
+  coingeckoId String
+  createdAt   DateTime @default(now())
+
+  @@unique([userId, symbol])
+  @@unique([userId, coingeckoId])
+  @@index([userId])
+}
+
+model FuturesPosition {
+  id                    Int                @id @default(autoincrement())
+  userId                Int
+  user                  User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  asset                 String
+  side                  String
+  leverage              Int
+  margin                String
+  quantity              String
+  initialQuantity       String?
+  initialMargin         String?
+  entryPrice            String
+  stopLoss              String?
+  takeProfit            String?
+  riskPercent           String?
+  plannedRisk           String?
+  feeRateBps            String?
+  entryFee              String?
+  exitFee               String?
+  fundingRate           String?
+  fundingIntervalHours  Int?
+  fundingPnl            String?
+  grossPnl              String?
+  maintenanceMarginRate String?
+  journalSetup          String?
+  journalTags           String?
+  journalNotes          String?
+  journalScreenshot     String?
+  autoCloseEnabled      Boolean            @default(true)
+  closeReason           String?
+  status                String             @default("OPEN")
+  exitPrice             String?
+  realizedPnl           String?
+  openedAt              DateTime           @default(now())
+  closedAt              DateTime?
+  executions            FuturesExecution[]
+
+  @@index([userId, status])
+}
+
+model FuturesExecution {
+  id              Int             @id @default(autoincrement())
+  positionId      Int
+  position        FuturesPosition @relation(fields: [positionId], references: [id], onDelete: Cascade)
+  quantity        String
+  exitPrice       String
+  allocatedMargin String
+  entryFee        String
+  exitFee         String
+  fundingPnl      String
+  grossPnl        String
+  realizedPnl     String
+  reason          String          @default("MANUAL")
+  closedAt        DateTime        @default(now())
+
+  @@index([positionId, closedAt])
+}
+
+model Buy {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  wallet    String
+  asset     String
+  amount    String
+  price     String
+  date      String
+  createdAt DateTime @default(now())
+  sells     Sell[]
+
+  @@index([userId])
+  @@index([asset])
+}
+
+model Sell {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  buyId     Int
+  buy       Buy      @relation(fields: [buyId], references: [id], onDelete: Cascade)
+  amount    String
+  sellPrice String
+  sellDate  String
+  profit    String
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([buyId])
+}
+
+model Candle {
+  asset     String
+  date      String
+  close     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@id([asset, date])
+  @@index([asset])
+}
+
+model Setting {
+  userId Int
+  key    String
+  value  String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, key])
+}
