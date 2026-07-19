@@ -1377,7 +1377,12 @@ button:disabled { opacity: 0.35; cursor: not-allowed; }
   min-width: 130px;
   margin: 0;
   padding-inline: 18px;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #04120b;
 }
+
+.btn-coin-action:hover { background: #38ffa2; box-shadow: 0 0 18px rgba(0, 255, 136, 0.2); }
 
 .coin-help,
 .coin-error {
@@ -2215,4 +2220,96 @@ button:disabled { opacity: 0.35; cursor: not-allowed; }
   .history-actions .btn-ghost { padding-inline: 0.5rem; font-size: 0.5rem; }
   .empty-positions { display: block !important; min-height: 0 !important; padding: 1.25rem !important; text-align: center !important; }
   .empty-positions::before { display: none !important; }
+}
+
+/* ===== MOBILE-FIRST PORTFOLIO ===== */
+@media (max-width: 680px) {
+  .container:not(.futures-page) { width: 100%; padding: 0.7rem 0.65rem 2rem; overflow: hidden; }
+  .container:not(.futures-page) .header { align-items: stretch; gap: 0.7rem; padding: 0.7rem 0 0.8rem; }
+  .container:not(.futures-page) .logo-section { gap: 0.55rem; }
+  .container:not(.futures-page) .logo-glyph svg { width: 22px; height: 22px; }
+  .container:not(.futures-page) .brand-name { font-size: 1rem; }
+  .container:not(.futures-page) .brand-sub { font-size: 0.42rem; letter-spacing: 0.13em; }
+  .container:not(.futures-page) .header-right { display: grid; grid-template-columns: minmax(0, 1fr) auto; width: 100%; gap: 0.45rem; }
+  .container:not(.futures-page) .sys-clock { display: none; }
+  .container:not(.futures-page) .user-info { min-width: 0; justify-content: space-between; }
+  .container:not(.futures-page) .user-email { max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.52rem; }
+  .container:not(.futures-page) .action-group { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem; }
+  .container:not(.futures-page) .action-group .btn-ghost { justify-content: center; padding: 0.4rem 0.55rem; font-size: 0.52rem; }
+  .container:not(.futures-page) .workspace-nav-bar { align-items: stretch; flex-direction: column; gap: 4px; padding: 8px; }
+  .container:not(.futures-page) .workspace-nav-label { border-right: 0; padding: 0.25rem 0.4rem; }
+  .container:not(.futures-page) .main-nav { width: 100%; }
+  .container:not(.futures-page) .main-nav-link { min-width: 0; flex: 1; padding: 0.55rem 0.35rem; text-align: center; }
+  .container:not(.futures-page) .ticker-wrap { margin-bottom: 0.8rem; }
+
+  .panel-overview { margin: 0.8rem 0; }
+  .panel-overview .panel-header { align-items: flex-start; gap: 0.6rem; padding: 0.7rem; }
+  .overview-return { align-items: flex-end; flex-direction: column; gap: 0; font-size: 0.85rem; }
+  .overview-return-sub { font-size: 0.42rem; letter-spacing: 0.1em; }
+  .overview-hero,
+  .overview-alloc { padding: 1rem; }
+  .overview-hero-value { font-size: 1.7rem; }
+  .overview-hero-breakdown { gap: 0.7rem; margin-top: 0.7rem; }
+  .overview-hero-breakdown span { font-size: 0.56rem; }
+  .overview-pnl { align-items: flex-start; flex-direction: column; gap: 0.2rem; margin-top: 0.85rem; font-size: 1rem; }
+  .overview-pnl-sub { font-size: 0.5rem; line-height: 1.45; }
+
+  .stats-grid { grid-template-columns: 1fr 1fr; margin-bottom: 0.8rem; }
+  .stat-card { min-width: 0; padding: 0.8rem; }
+  .stat-label { font-size: 0.48rem; letter-spacing: 0.09em; margin-bottom: 0.4rem; }
+  .stat-value { overflow-wrap: anywhere; font-size: 0.95rem; }
+  .stat-sub { font-size: 0.5rem; }
+  .stat-usd { grid-column: 1 / -1; }
+  .usd-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem; }
+  .usd-controls input { grid-column: 1 / -1; width: 100%; min-width: 0; }
+
+  .panel-prices .panel-header { align-items: stretch; flex-direction: column; gap: 0.6rem; }
+  .price-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem; }
+  .price-controls .status-pill { grid-column: 1 / -1; text-align: center; }
+  .price-controls .btn-ghost { justify-content: center; }
+  .price-row { grid-template-columns: 1fr; }
+  .price-tile { padding: 0.75rem 0.9rem; }
+  .price-asset { margin-bottom: 0.2rem; font-size: 0.72rem; }
+  .price-val input { font-size: 1rem; }
+  .price-label { font-size: 0.52rem; }
+
+  .coins-body { padding: 0.75rem; }
+  .coin-list { gap: 0.4rem; }
+  .coin-chip { min-width: 0; max-width: 100%; padding: 0.4rem 0.5rem; }
+  .coin-chip-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .coin-help { font-size: 0.55rem; }
+
+  .forms-row { gap: 0.8rem; margin-bottom: 0.8rem; }
+  .collapsible-content { padding: 0.75rem; }
+  .form-grid { gap: 0.7rem; }
+  .quick-buttons { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.3rem; }
+  .panel-sell .quick-buttons { grid-template-columns: repeat(4, 1fr); }
+  .qbtn { min-width: 0; padding: 0.3rem 0.2rem; text-align: center; }
+  .btn-action { margin-top: 0.8rem; padding: 0.65rem; }
+  .details-grid { grid-template-columns: 1fr 1fr; }
+  .detail-item { min-width: 0; padding: 0.7rem; }
+  .detail-label { font-size: 0.46rem; }
+  .detail-value { overflow-wrap: anywhere; font-size: 0.72rem; }
+
+  .panel-ledger .panel-header { position: static; padding: 0.7rem; }
+  .panel-ledger .table-wrapper { overflow: visible; padding: 0.6rem; }
+  .panel-ledger table,
+  .panel-ledger tbody,
+  .panel-ledger tr,
+  .panel-ledger td { display: block; width: 100%; }
+  .panel-ledger thead { display: none; }
+  .panel-ledger tbody { display: grid; gap: 0.65rem; }
+  .panel-ledger tbody tr { overflow: hidden; border: 1px solid var(--border); border-left: 3px solid var(--text-dim); border-radius: 4px; background: var(--bg); }
+  .panel-ledger tbody tr.row-buy { border-left-color: var(--accent); }
+  .panel-ledger tbody tr.row-sell { border-left-color: var(--red); }
+  .panel-ledger td { display: grid; grid-template-columns: minmax(92px, 0.75fr) minmax(0, 1.25fr); align-items: center; gap: 0.65rem; min-height: 38px; padding: 0.5rem 0.65rem; border-bottom: 1px solid var(--border2); text-align: right; font-size: 0.66rem; }
+  .panel-ledger td::before { content: attr(data-label); color: var(--text-dim); font: 0.48rem var(--mono); letter-spacing: 0.08em; text-align: left; }
+  .panel-ledger td:last-child { border-bottom: 0; }
+  .ledger-action-cell { min-height: 44px !important; }
+  .ledger-action-cell .delete-btn { justify-self: end; width: 34px; height: 30px; }
+  .ledger-empty { display: block !important; min-height: 0 !important; padding: 1.25rem !important; text-align: center !important; }
+  .ledger-empty::before { display: none !important; }
+  .pagination { padding: 0.65rem; }
+  .pagination .btn-ghost { padding: 0.4rem 0.55rem; font-size: 0.5rem; }
+  .page-info { font-size: 0.52rem; }
 }

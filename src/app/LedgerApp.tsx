@@ -802,32 +802,32 @@ export default function LedgerApp() {
             <tbody>
               {pageRows.map((row) => (
                 <tr key={`${row.kind}-${row.id}`} className={row.kind === "buy" ? "row-buy" : "row-sell"}>
-                  <td>{row.date}</td>
-                  <td>
+                  <td data-label="DATE">{row.date}</td>
+                  <td data-label="TYPE">
                     <span className={row.kind === "buy" ? "badge-buy" : "badge-sell"}>
                       {row.kind === "buy" ? "BUY" : "SELL"}
                     </span>
                   </td>
-                  <td>{row.wallet}</td>
-                  <td style={{ color: row.kind === "buy" ? "var(--accent)" : "var(--red)", fontWeight: 700 }}>
+                  <td data-label="WALLET">{row.wallet}</td>
+                  <td data-label="ASSET" style={{ color: row.kind === "buy" ? "var(--accent)" : "var(--red)", fontWeight: 700 }}>
                     {row.asset}
                   </td>
-                  <td>
+                  <td data-label="AMOUNT">
                     {fmtQty(row.amount)}
                     {row.kind === "buy" && row.remaining !== null && (
                       <span style={{ color: "var(--text-dim)", fontSize: "0.65rem" }}> ({fmtQty(row.remaining)} open)</span>
                     )}
                   </td>
-                  <td>{fmtUsd(row.price)}</td>
-                  <td>{fmtUsd(row.total)}</td>
-                  <td>
+                  <td data-label="PRICE">{fmtUsd(row.price)}</td>
+                  <td data-label="TOTAL">{fmtUsd(row.total)}</td>
+                  <td data-label="MARKET PRICE">
                     {row.currentPrice !== null ? (
                       fmtUsd(row.currentPrice)
                     ) : (
                       <span style={{ color: "var(--text-dim)" }}>—</span>
                     )}
                   </td>
-                  <td className={row.unrealized !== null ? (row.unrealized >= 0 ? "profit-positive" : "profit-negative") : undefined}>
+                  <td data-label={row.kind === "sell" ? "REALIZED P&L" : "UNREALIZED P&L"} className={row.unrealized !== null ? (row.unrealized >= 0 ? "profit-positive" : "profit-negative") : undefined}>
                     {row.kind === "sell" && row.profit !== null ? (
                       <span className={row.profit >= 0 ? "profit-positive" : "profit-negative"}>
                         {fmtSignedUsd(row.profit)}
@@ -838,9 +838,10 @@ export default function LedgerApp() {
                       <span style={{ color: "var(--text-dim)" }}>—</span>
                     )}
                   </td>
-                  <td>
+                  <td data-label="ACTION" className="ledger-action-cell">
                     <button
                       className="delete-btn"
+                      aria-label={`Delete ${row.kind} transaction for ${row.asset}`}
                       onClick={() => (row.kind === "buy" ? onDeleteBuy(row.id) : onDeleteSell(row.id))}
                     >
                       ✕
@@ -850,7 +851,7 @@ export default function LedgerApp() {
               ))}
               {pageRows.length === 0 && (
                 <tr>
-                  <td colSpan={10} style={{ textAlign: "center", color: "var(--text-dim)" }}>
+                  <td className="ledger-empty" colSpan={10} style={{ textAlign: "center", color: "var(--text-dim)" }}>
                     No transactions yet.
                   </td>
                 </tr>
