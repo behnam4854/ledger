@@ -827,6 +827,82 @@ input[readonly]:focus {
 }
 
 /* ---- LEDGER TABLE ---- */
+.panel-asset-ledger { margin-bottom: 16px; }
+
+.ledger-asset-count {
+  color: var(--text-dim);
+  font: 0.58rem var(--mono);
+  letter-spacing: 0.1em;
+}
+
+.asset-ledger-list {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+}
+
+.asset-ledger-card {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--bg);
+}
+
+.asset-ledger-card.expanded { border-color: var(--border2); }
+
+.asset-ledger-summary {
+  display: grid;
+  grid-template-columns: minmax(120px, 1.2fr) repeat(3, minmax(95px, 1fr)) auto 20px;
+  align-items: center;
+  width: 100%;
+  gap: 14px;
+  min-height: 68px;
+  padding: 12px 14px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.asset-ledger-summary:hover,
+.asset-ledger-summary:focus-visible { background: var(--bg2); outline: none; }
+
+.asset-ledger-identity,
+.asset-ledger-metric { display: grid; gap: 3px; min-width: 0; }
+.asset-ledger-identity strong { color: var(--accent); font: 700 0.9rem var(--mono); }
+.asset-ledger-identity small,
+.asset-ledger-metric small { overflow: hidden; color: var(--text-dim); font: 0.5rem var(--mono); letter-spacing: 0.08em; text-overflow: ellipsis; white-space: nowrap; }
+.asset-ledger-metric strong { overflow: hidden; color: var(--text-bright); font: 700 0.72rem var(--mono); text-overflow: ellipsis; white-space: nowrap; }
+.asset-ledger-transactions { color: var(--text-dim); font: 0.55rem var(--mono); white-space: nowrap; }
+.asset-ledger-chevron { color: var(--accent); font-size: 1.1rem; transition: transform 0.18s ease; }
+.asset-ledger-card.expanded .asset-ledger-chevron { transform: rotate(180deg); }
+
+.asset-transaction-list {
+  display: grid;
+  border-top: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.12);
+}
+
+.asset-transaction {
+  display: grid;
+  grid-template-columns: minmax(120px, 1.2fr) repeat(4, minmax(85px, 1fr)) 36px;
+  align-items: center;
+  gap: 12px;
+  min-height: 58px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.asset-transaction:last-child { border-bottom: 0; }
+.asset-transaction-heading { display: flex; align-items: center; gap: 8px; }
+.asset-transaction-heading time { color: var(--text-dim); font: 0.58rem var(--mono); }
+.asset-transaction-detail { display: grid; gap: 3px; min-width: 0; }
+.asset-transaction-detail small { color: var(--text-dim); font: 0.46rem var(--mono); letter-spacing: 0.08em; }
+.asset-transaction-detail strong { overflow: hidden; font: 0.65rem var(--mono); text-overflow: ellipsis; white-space: nowrap; }
+.asset-transaction-delete { justify-self: end; }
+.asset-ledger-empty { padding: 28px 16px; color: var(--text-dim); font: 0.65rem var(--mono); text-align: center; }
+
 .panel-ledger .panel-header {
   position: sticky;
   top: 0;
@@ -1341,6 +1417,9 @@ button:disabled { opacity: 0.35; cursor: not-allowed; }
   gap: 8px;
   margin-bottom: 14px;
 }
+
+.coin-list[hidden],
+.panel-ledger[hidden] { display: none !important; }
 
 .coin-chip {
   display: flex;
@@ -2348,6 +2427,29 @@ button:disabled { opacity: 0.35; cursor: not-allowed; }
   .detail-item { min-width: 0; padding: 0.7rem; }
   .detail-label { font-size: 0.46rem; }
   .detail-value { overflow-wrap: anywhere; font-size: 0.72rem; }
+
+  .panel-asset-ledger .panel-header { padding: 0.7rem; }
+  .asset-ledger-list { gap: 0.55rem; padding: 0.6rem; }
+  .asset-ledger-summary {
+    position: relative;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.7rem 0.55rem;
+    min-height: 0;
+    padding: 0.75rem;
+  }
+  .asset-ledger-identity { grid-column: 1 / 3; }
+  .asset-ledger-transactions { grid-column: 3; padding-right: 1rem; text-align: right; }
+  .asset-ledger-chevron { position: absolute; top: 0.65rem; right: 0.55rem; }
+  .asset-ledger-metric strong { font-size: 0.66rem; }
+  .asset-transaction {
+    position: relative;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.65rem;
+    min-height: 0;
+    padding: 0.75rem;
+  }
+  .asset-transaction-heading { grid-column: 1 / -1; padding-right: 2.2rem; }
+  .asset-transaction-delete { position: absolute; top: 0.55rem; right: 0.55rem; width: 32px; height: 30px; }
 
   .panel-ledger .panel-header { position: static; padding: 0.7rem; }
   .panel-ledger .table-wrapper { overflow: visible; padding: 0.6rem; }

@@ -59,6 +59,7 @@ export default function LedgerApp() {
   const [searchingCoins, setSearchingCoins] = useState(false);
   const [addingCoin, setAddingCoin] = useState(false);
   const [coinError, setCoinError] = useState("");
+  const [expandedLedgerAsset, setExpandedLedgerAsset] = useState<string | null>(null);
 
   // Table state
   const [page, setPage] = useState(1);
@@ -74,7 +75,6 @@ export default function LedgerApp() {
   const buys = portfolio?.buys ?? [];
   const sells = portfolio?.sells ?? [];
   const usd = portfolio?.usd ?? 0;
-  const enabledCoinIds = useMemo(() => coins.map((coin) => coin.coingeckoId).sort().join(","), [coins]);
 
   const reload = useCallback(async () => {
     try {
@@ -126,13 +126,12 @@ export default function LedgerApp() {
     }
 
     let active = true;
-    const enabledIds = new Set(enabledCoinIds.split(",").filter(Boolean));
     setCoinError("");
     setSearchingCoins(true);
     const id = setTimeout(async () => {
       try {
         const results = await api.searchCoins(query);
-        if (active) setCoinResults(results.filter((result) => !enabledIds.has(result.id)));
+        if (active) setCoinResults(results);
       } catch (error) {
         if (active) {
           setCoinResults([]);
@@ -147,7 +146,7 @@ export default function LedgerApp() {
       active = false;
       clearTimeout(id);
     };
-  }, [coinQuery, enabledCoinIds, selectedCoin]);
+  }, [coinQuery, selectedCoin]);
 
   // Clock
   useEffect(() => {
@@ -240,6 +239,37 @@ export default function LedgerApp() {
 
     return rows;
   }, [buys, sells, sort, priceFor]);
+
+  const assetLedgers = useMemo(() => {
+    const grouped = new Map<string, LedgerRow[]>();
+    for (const row of sortedRows) {
+      const rows = grouped.get(row.asset) ?? [];
+      rows.push(row);
+      grouped.set(row.asset, rows);
+    }
+
+    return [...grouped.entries()]
+      .map(([asset, rows]) => {
+        const holding = rows.reduce(
+          (total, row) => total + (row.kind === "buy" ? (row.remaining ?? 0) : 0),
+          0,
+        );
+        const marketPrice = priceFor(asset);
+        const pnl = rows.reduce(
+          (total, row) => total + (row.kind === "sell" ? (row.profit ?? 0) : (row.unrealized ?? 0)),
+          0,
+        );
+        return {
+          asset,
+          name: coins.find((coin) => coin.symbol === asset)?.name ?? asset,
+          holding,
+          marketValue: holding * marketPrice,
+          pnl,
+          rows: [...rows].sort((a, b) => b.date.localeCompare(a.date)),
+        };
+      })
+      .sort((a, b) => Number(b.holding > 0) - Number(a.holding > 0) || a.asset.localeCompare(b.asset));
+  }, [coins, priceFor, sortedRows]);
 
   const totalPages = Math.max(1, Math.ceil(sortedRows.length / rowsPerPage));
   const safePage = Math.min(page, totalPages);
@@ -561,9 +591,10 @@ export default function LedgerApp() {
       <div className="panel panel-coins">
         <div className="panel-header">
           <span className="panel-title">MANAGE COINS</span>
+          <span className="coin-count">{coins.length} COINS</span>
         </div>
         <div className="coins-body">
-          <div className="coin-list" aria-label="Enabled coins">
+          <div className="coin-list" aria-label="Enabled coins" hidden>
             {coins.map((coin) => (
               <div className="coin-chip" key={coin.symbol}>
                 <span className="coin-chip-symbol">{coin.symbol}</span>
@@ -816,8 +847,96 @@ export default function LedgerApp() {
         <PositionDetails buy={selectedBuy} currentPrice={priceFor(selectedBuy.asset)} />
       )}
 
+      {/* ASSET LEDGER */}
+      <div className="panel panel-asset-ledger">
+        <div className="panel-header">
+          <span className="panel-title">FULL LEDGER</span>
+          <span className="ledger-asset-count">{assetLedgers.length} ASSETS</span>
+        </div>
+        <div className="asset-ledger-list">
+          {assetLedgers.map((ledger) => {
+            const expanded = expandedLedgerAsset === ledger.asset;
+            return (
+              <section className={`asset-ledger-card${expanded ? " expanded" : ""}`} key={ledger.asset}>
+                <button
+                  type="button"
+                  className="asset-ledger-summary"
+                  aria-expanded={expanded}
+                  onClick={() => setExpandedLedgerAsset(expanded ? null : ledger.asset)}
+                >
+                  <span className="asset-ledger-identity">
+                    <strong>{ledger.asset}</strong>
+                    <small>{ledger.name}</small>
+                  </span>
+                  <span className="asset-ledger-metric">
+                    <small>HOLDING</small>
+                    <strong>{fmtQty(ledger.holding)}</strong>
+                  </span>
+                  <span className="asset-ledger-metric">
+                    <small>VALUE</small>
+                    <strong>{fmtUsd(ledger.marketValue)}</strong>
+                  </span>
+                  <span className="asset-ledger-metric">
+                    <small>TOTAL P&amp;L</small>
+                    <strong className={ledger.pnl >= 0 ? "profit-positive" : "profit-negative"}>
+                      {fmtSignedUsd(ledger.pnl)}
+                    </strong>
+                  </span>
+                  <span className="asset-ledger-transactions">{ledger.rows.length} TXNS</span>
+                  <span className="asset-ledger-chevron" aria-hidden="true">⌄</span>
+                </button>
+
+                {expanded && (
+                  <div className="asset-transaction-list">
+                    {ledger.rows.map((row) => {
+                      const transactionPnl = row.kind === "sell" ? row.profit : row.unrealized;
+                      return (
+                        <div className={`asset-transaction ${row.kind}`} key={`${row.kind}-${row.id}`}>
+                          <div className="asset-transaction-heading">
+                            <span className={row.kind === "buy" ? "badge-buy" : "badge-sell"}>
+                              {row.kind.toUpperCase()}
+                            </span>
+                            <time>{row.date}</time>
+                          </div>
+                          <div className="asset-transaction-detail">
+                            <small>QUANTITY</small>
+                            <strong>{fmtQty(row.amount)}</strong>
+                          </div>
+                          <div className="asset-transaction-detail">
+                            <small>PRICE</small>
+                            <strong>{fmtUsd(row.price)}</strong>
+                          </div>
+                          <div className="asset-transaction-detail">
+                            <small>TOTAL</small>
+                            <strong>{fmtUsd(row.total)}</strong>
+                          </div>
+                          <div className="asset-transaction-detail">
+                            <small>P&amp;L</small>
+                            <strong className={transactionPnl !== null ? (transactionPnl >= 0 ? "profit-positive" : "profit-negative") : undefined}>
+                              {transactionPnl !== null ? fmtSignedUsd(transactionPnl) : "—"}
+                            </strong>
+                          </div>
+                          <button
+                            className="delete-btn asset-transaction-delete"
+                            aria-label={`Delete ${row.kind} transaction for ${row.asset}`}
+                            onClick={() => (row.kind === "buy" ? onDeleteBuy(row.id) : onDeleteSell(row.id))}
+                          >
+                            ×
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </section>
+            );
+          })}
+          {assetLedgers.length === 0 && <div className="asset-ledger-empty">No transactions yet.</div>}
+        </div>
+      </div>
+
       {/* LEDGER */}
-      <div className="panel panel-ledger">
+      {false && <div className="panel panel-ledger" hidden>
         <div className="panel-header">
           <span className="panel-title">FULL LEDGER</span>
           <div className="ledger-controls">
@@ -942,7 +1061,7 @@ export default function LedgerApp() {
             NEXT ▶
           </button>
         </div>
-      </div>
+      </div>}
 
       <div className="footnote">
         DATA STORED IN A DATABASE · LIVE PRICES VIA COINGECKO (SERVER-CACHED) · AUTO-REFRESH 10s

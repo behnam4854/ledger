@@ -31,6 +31,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Choose a coin from the search results" }, { status: 400 });
   }
 
+  const existingCoins = await getUserCoins(userId);
+  if (existingCoins.some((coin) => coin.coingeckoId === coingeckoId)) {
+    return NextResponse.json({ error: "This coin is already added" }, { status: 409 });
+  }
+
   let verified: Awaited<ReturnType<typeof fetchCoinGeckoCoin>>;
   try {
     verified = await fetchCoinGeckoCoin(coingeckoId);
@@ -46,7 +51,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "That coin uses a symbol or name LEDGRS cannot store" }, { status: 400 });
   }
   if (CORE_COINS.some((coin) => coin.symbol === symbol || coin.coingeckoId === coingeckoId)) {
-    return NextResponse.json({ error: "That coin is already built in" }, { status: 409 });
+    return NextResponse.json({ error: "This coin is already added" }, { status: 409 });
   }
 
   try {
@@ -57,7 +62,7 @@ export async function POST(req: NextRequest) {
     );
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-      return NextResponse.json({ error: "You already added that symbol or CoinGecko coin" }, { status: 409 });
+      return NextResponse.json({ error: "This coin is already added" }, { status: 409 });
     }
     throw error;
   }
