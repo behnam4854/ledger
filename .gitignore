@@ -23,3 +23,8 @@ prisma/dev.db-journal
 *.tsbuildinfo
 .idea
 .vscode
+
+# Playwright artifacts
+/playwright-report/
+/test-results/
+/blob-report/

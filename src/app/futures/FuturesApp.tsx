@@ -270,21 +270,55 @@ export default function FuturesApp() {
 
   const closePosition = async (id: number) => {
     setError("");
+    setActionFeedback(null);
+    const position = openPositions.find((item) => item.id === id);
+    if (!position) {
+      const message = "Open position not found. Refresh and try again.";
+      setError(message);
+      setActionFeedback({ tone: "error", text: message });
+      return;
+    }
+
+    const percent = closePercents[id] ?? 100;
+    if (!Number.isFinite(percent) || percent < 1 || percent > 100) {
+      const message = "Close amount must be between 1% and 100%.";
+      setError(message);
+      setActionFeedback({ tone: "error", text: message });
+      return;
+    }
+
+    const closeQuantity = new Decimal(position.quantity).times(percent).div(100);
+    if (!closeQuantity.isFinite() || closeQuantity.lessThanOrEqualTo(0) || closeQuantity.greaterThan(position.quantity)) {
+      const message = "Close quantity is outside the open position size.";
+      setError(message);
+      setActionFeedback({ tone: "error", text: message });
+      return;
+    }
+
+    const exitPrice = exitPrices[id]?.trim() || (position.markPrice > 0 ? String(position.markPrice) : "");
+    const parsedExitPrice = Number(exitPrice);
+    if (!Number.isFinite(parsedExitPrice) || parsedExitPrice <= 0) {
+      const message = "Enter a valid exit price greater than zero.";
+      setError(message);
+      setActionFeedback({ tone: "error", text: message });
+      return;
+    }
+
+    const action = percent === 100 ? "fully close" : `close ${percent}% of`;
+    const confirmed = window.confirm(
+      `Confirm ${action} ${position.asset} ${position.side}?\n\nQuantity: ${fmtQty(closeQuantity.toString())} ${position.asset}\nExit price: ${fmtUsd(parsedExitPrice)}\n\nThis will record a permanent paper-trading execution.`,
+    );
+    if (!confirmed) return;
+
     setClosingId(id);
     try {
-      const position = openPositions.find((item) => item.id === id);
-      if (!position) throw new Error("Open position not found. Refresh and try again.");
-      const percent = closePercents[id] ?? 100;
-      const closeQuantity = new Decimal(position.quantity).times(percent).div(100).toString();
-      const exitPrice = exitPrices[id]?.trim() || (position.markPrice > 0 ? String(position.markPrice) : "");
-      if (!exitPrice) throw new Error("Enter an exit price because no live mark is available.");
-      await api.closeFuturesPosition(id, exitPrice, closeQuantity);
+      await api.closeFuturesPosition(id, exitPrice, closeQuantity.toString());
       await loadAccount();
       setActionFeedback({
         tone: "success",
         text: percent === 100
           ? `${position.asset} position closed successfully.`
-          : `Closed ${fmtQty(closeQuantity)} ${position.asset} (${percent}%).`,
+          : `Closed ${fmtQty(closeQuantity.toString())} ${position.asset} (${percent}%).`,
       });
       setExitPrices((current) => {
         const next = { ...current };
@@ -392,8 +426,8 @@ export default function FuturesApp() {
       takeProfit: position.takeProfit ?? "",
       feeRateBps: position.feeRateBps ?? "0",
       fundingRate: position.fundingRate ?? "0",
-      openedAt: new Date(position.openedAt).toISOString().slice(0, 16),
-      closedAt: new Date(position.closedAt ?? Date.now()).toISOString().slice(0, 16),
+      openedAt: new Date(position.openedAt).toISOString().slice(0, 19),
+      closedAt: new Date(position.closedAt ?? Date.now()).toISOString().slice(0, 19),
     });
   };
 
@@ -492,9 +526,9 @@ export default function FuturesApp() {
         <FuturesStat label="MARGIN USAGE" value={`${marginUsage.toFixed(1)}%`} />
       </div>
 
-      {error && <div className="futures-error">{error}</div>}
+      {error && <div className="futures-error" data-testid="futures-error">{error}</div>}
       {actionFeedback && (
-        <div className={`futures-toast ${actionFeedback.tone}`} role="status" aria-live="polite">
+        <div className={`futures-toast ${actionFeedback.tone}`} data-testid="action-feedback" role="status" aria-live="polite">
           <span>{actionFeedback.text}</span>
           <button type="button" aria-label="Dismiss status" onClick={() => setActionFeedback(null)}>×</button>
         </div>
@@ -506,7 +540,7 @@ export default function FuturesApp() {
             <span className="panel-title">ORDER TICKET</span>
             <span className="paper-badge">PAPER ONLY</span>
           </div>
-          <form onSubmit={submitOrder} className="futures-order-form">
+          <form onSubmit={submitOrder} className="futures-order-form" data-testid="futures-order-form">
             <div className="field">
               <label htmlFor="futuresAsset">CONTRACT</label>
               <select id="futuresAsset" value={order.asset} onChange={(event) => setOrder((current) => ({ ...current, asset: event.target.value }))}>
@@ -609,7 +643,7 @@ export default function FuturesApp() {
               <PreviewRow label="RISK PLAN" value={order.stopLoss || order.takeProfit ? `SL ${order.stopLoss || "—"} · TP ${order.takeProfit || "—"}` : "NOT SET"} />
             </div>
 
-            <button className={`btn-action futures-submit ${order.side.toLowerCase()}`} type="submit" disabled={submitting || !(effectiveEntryPrice > 0) || (order.sizingMode === "RISK" && !riskSizing)}>
+            <button className={`btn-action futures-submit ${order.side.toLowerCase()}`} data-testid="open-position" type="submit" disabled={submitting || !(effectiveEntryPrice > 0) || (order.sizingMode === "RISK" && !riskSizing)}>
               {submitting ? "OPENING..." : `OPEN ${order.side} · ${order.leverage}x`}
             </button>
           </form>
@@ -655,7 +689,7 @@ export default function FuturesApp() {
                 const closeQuantity = Number(position.quantity) * (closePercent / 100);
 
                 return (
-                <tr key={position.id} className={position.liquidated ? "liquidation-row" : ""}>
+                <tr key={position.id} data-testid={`open-position-${position.id}`} className={position.liquidated ? "liquidation-row" : ""}>
                   <td data-label="CONTRACT"><b>{position.asset}/USD</b><small>{position.leverage}x ISOLATED</small>{position.autoCloseEnabled && <span className="trigger-badge take">AUTO SL/TP</span>}{position.stopHit && <span className="trigger-badge stop">SL HIT</span>}{position.takeHit && <span className="trigger-badge take">TP HIT</span>}</td>
                   <td data-label="SIDE"><span className={`futures-side ${position.side.toLowerCase()}`}>{position.side}</span></td>
                   <td data-label="SIZE">{fmtUsd(position.notional)}<small>{fmtQty(position.quantity)} {position.asset}</small></td>
@@ -678,6 +712,7 @@ export default function FuturesApp() {
                           aria-label={`Close amount for ${position.asset}`}
                           aria-valuetext={`${fmtQty(closeQuantity)} ${position.asset}, ${closePercent}%`}
                           className="close-size-slider"
+                          data-testid={`close-slider-${position.id}`}
                           type="range"
                           min="1"
                           max="100"
@@ -698,9 +733,9 @@ export default function FuturesApp() {
                       <div className="position-adjustment">
                         <div className="position-adjustment-head"><div><b>ADJUST POSITION</b><span>Update protection levels or isolated collateral.</span></div></div>
                         <div className="position-adjustment-grid">
-                          <label><span>STOP-LOSS</span><input type="number" min="0" step="any" placeholder="Not set" value={adjustments[position.id]?.stopLoss ?? ""} onChange={(event) => setAdjustments((current) => ({ ...current, [position.id]: { ...current[position.id], stopLoss: event.target.value } }))} /></label>
-                          <label><span>TAKE-PROFIT</span><input type="number" min="0" step="any" placeholder="Not set" value={adjustments[position.id]?.takeProfit ?? ""} onChange={(event) => setAdjustments((current) => ({ ...current, [position.id]: { ...current[position.id], takeProfit: event.target.value } }))} /></label>
-                          <label><span>MARGIN CHANGE</span><input type="number" step="any" value={adjustments[position.id]?.marginDelta ?? "0"} onChange={(event) => setAdjustments((current) => ({ ...current, [position.id]: { ...current[position.id], marginDelta: event.target.value } }))} /><small>Use a negative value to remove margin.</small></label>
+                          <label><span>STOP-LOSS</span><input aria-label={`Adjusted stop-loss for ${position.asset}`} type="number" min="0" step="any" placeholder="Not set" value={adjustments[position.id]?.stopLoss ?? ""} onChange={(event) => setAdjustments((current) => ({ ...current, [position.id]: { ...current[position.id], stopLoss: event.target.value } }))} /></label>
+                          <label><span>TAKE-PROFIT</span><input aria-label={`Adjusted take-profit for ${position.asset}`} type="number" min="0" step="any" placeholder="Not set" value={adjustments[position.id]?.takeProfit ?? ""} onChange={(event) => setAdjustments((current) => ({ ...current, [position.id]: { ...current[position.id], takeProfit: event.target.value } }))} /></label>
+                          <label><span>MARGIN CHANGE</span><input aria-label={`Margin change for ${position.asset}`} type="number" step="any" value={adjustments[position.id]?.marginDelta ?? "0"} onChange={(event) => setAdjustments((current) => ({ ...current, [position.id]: { ...current[position.id], marginDelta: event.target.value } }))} /><small>Use a negative value to remove margin.</small></label>
                         </div>
                         <div className="position-adjustment-footer"><button className="adjustment-save-button" disabled={submitting} onClick={() => saveAdjustment(position.id)}>{submitting ? "SAVING…" : "SAVE CHANGES"}</button></div>
                       </div>
@@ -745,13 +780,13 @@ export default function FuturesApp() {
             <div className="field"><label>LEVERAGE</label><input type="number" min="1" max="20" value={closedDraft.leverage} onChange={(event) => setClosedDraft((current) => current ? { ...current, leverage: Number(event.target.value) } : current)} /></div>
             <div className="field"><label>MARGIN USD</label><input type="number" min="0" step="any" value={closedDraft.margin} onChange={(event) => setClosedDraft((current) => current ? { ...current, margin: event.target.value } : current)} /></div>
             <div className="field"><label>ENTRY PRICE</label><input type="number" min="0" step="any" value={closedDraft.entryPrice} onChange={(event) => setClosedDraft((current) => current ? { ...current, entryPrice: event.target.value } : current)} /></div>
-            <div className="field"><label>EXIT PRICE</label><input type="number" min="0" step="any" value={closedDraft.exitPrice} onChange={(event) => setClosedDraft((current) => current ? { ...current, exitPrice: event.target.value } : current)} /></div>
+            <div className="field"><label>EXIT PRICE</label><input data-testid="closed-exit-price" type="number" min="0" step="any" value={closedDraft.exitPrice} onChange={(event) => setClosedDraft((current) => current ? { ...current, exitPrice: event.target.value } : current)} /></div>
             <div className="field"><label>STOP-LOSS</label><input type="number" min="0" step="any" value={closedDraft.stopLoss} onChange={(event) => setClosedDraft((current) => current ? { ...current, stopLoss: event.target.value } : current)} /></div>
             <div className="field"><label>TAKE-PROFIT</label><input type="number" min="0" step="any" value={closedDraft.takeProfit} onChange={(event) => setClosedDraft((current) => current ? { ...current, takeProfit: event.target.value } : current)} /></div>
             <div className="field"><label>FEE / SIDE BPS</label><input type="number" min="0" step="any" value={closedDraft.feeRateBps} onChange={(event) => setClosedDraft((current) => current ? { ...current, feeRateBps: event.target.value } : current)} /></div>
             <div className="field"><label>FUNDING / INTERVAL %</label><input type="number" step="any" value={closedDraft.fundingRate} onChange={(event) => setClosedDraft((current) => current ? { ...current, fundingRate: event.target.value } : current)} /></div>
-            <div className="field"><label>OPENED</label><input type="datetime-local" value={closedDraft.openedAt} onChange={(event) => setClosedDraft((current) => current ? { ...current, openedAt: event.target.value } : current)} /></div>
-            <div className="field"><label>CLOSED</label><input type="datetime-local" value={closedDraft.closedAt} onChange={(event) => setClosedDraft((current) => current ? { ...current, closedAt: event.target.value } : current)} /></div>
+            <div className="field"><label>OPENED</label><input type="datetime-local" step="1" value={closedDraft.openedAt} onChange={(event) => setClosedDraft((current) => current ? { ...current, openedAt: event.target.value } : current)} /></div>
+            <div className="field"><label>CLOSED</label><input type="datetime-local" step="1" value={closedDraft.closedAt} onChange={(event) => setClosedDraft((current) => current ? { ...current, closedAt: event.target.value } : current)} /></div>
           </div>
           <div className="closed-editor-footer"><span>Saving recalculates quantity, fees, funding, all fills, realized P&L, analytics, and the paper balance.</span><button className="btn-action" disabled={submitting} onClick={saveClosedTrade}>{submitting ? "RECALCULATING…" : "SAVE & RECALCULATE"}</button></div>
         </div>

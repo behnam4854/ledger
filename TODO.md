@@ -6,13 +6,16 @@
 - Critical workflows must work without horizontal page scrolling at phone widths.
 - Every production-facing change must be tested at desktop and common mobile viewport sizes.
 
-## Reliability sprint
+## Sprint 1 — Reliability (complete)
 
-- [ ] Add end-to-end tests for registration and login.
-- [ ] Add end-to-end tests for opening, adjusting, partially closing, and fully closing futures positions.
-- [ ] Add end-to-end tests for editing and deleting closed trades.
-- [ ] Add automated mobile viewport coverage for the portfolio and futures workspaces.
-- [ ] Add order validation and confirmation dialogs before closing positions.
+- [x] Add end-to-end tests for registration and login.
+- [x] Add end-to-end tests for opening, adjusting, partially closing, and fully closing futures positions.
+- [x] Add end-to-end tests for editing and deleting closed trades.
+- [x] Add automated mobile viewport coverage for the portfolio and futures workspaces.
+- [x] Add order validation and confirmation dialogs before closing positions.
+
+## Sprint 2 — Trading audit history
+
 - [ ] Add a persistent activity log for every position change and execution.
 
 ## Trading features

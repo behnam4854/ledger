@@ -78,12 +78,14 @@ export default function AuthPage() {
 
         <div className="auth-tabs">
           <button
+            data-testid="auth-login-tab"
             className={`auth-tab${mode === "login" ? " active" : ""}`}
             onClick={() => { setMode("login"); setError(""); }}
           >
             LOGIN
           </button>
           <button
+            data-testid="auth-register-tab"
             className={`auth-tab${mode === "register" ? " active" : ""}`}
             onClick={() => { setMode("register"); setError(""); }}
           >
@@ -95,6 +97,7 @@ export default function AuthPage() {
           <div className="field">
             <label>EMAIL</label>
             <input
+              data-testid="auth-email"
               type="email"
               autoComplete="email"
               required
@@ -106,6 +109,7 @@ export default function AuthPage() {
           <div className="field">
             <label>PASSWORD</label>
             <input
+              data-testid="auth-password"
               type="password"
               autoComplete={mode === "login" ? "current-password" : "new-password"}
               required
@@ -118,6 +122,7 @@ export default function AuthPage() {
             <div className="field">
               <label>CONFIRM PASSWORD</label>
               <input
+                data-testid="auth-confirm-password"
                 type="password"
                 autoComplete="new-password"
                 required
@@ -127,8 +132,8 @@ export default function AuthPage() {
               />
             </div>
           )}
-          {error && <div className="auth-error">{error}</div>}
-          <button className="btn-action btn-buy-action" type="submit" disabled={loading}>
+          {error && <div className="auth-error" data-testid="auth-error">{error}</div>}
+          <button className="btn-action btn-buy-action" data-testid="auth-submit" type="submit" disabled={loading}>
             {loading ? "..." : mode === "login" ? "LOGIN" : "CREATE ACCOUNT"}
           </button>
         </form>
