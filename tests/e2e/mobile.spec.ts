@@ -10,6 +10,7 @@ test("portfolio and futures workspaces do not overflow common phone viewports", 
     await expect(page.getByTestId("unified-dashboard")).toBeVisible();
     await expectNoHorizontalOverflow(page);
     await page.goto("/futures");
+    await expect(page.locator(".futures-risk-panel")).toBeHidden();
     await expectNoHorizontalOverflow(page);
   }
 });
