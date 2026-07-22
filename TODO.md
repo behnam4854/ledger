@@ -26,6 +26,6 @@
 - [ ] Improve liquidation simulation with maintenance-margin tiers.
 - [ ] Expand exchange-fee and funding simulation.
 
-## Portfolio experience
+## Sprint 5 — Unified portfolio experience (complete)
 
-- [ ] Build a unified dashboard combining spot and futures equity, P&L, exposure, and history.
+- [x] Build a unified dashboard combining spot and futures equity, P&L, exposure, and history.

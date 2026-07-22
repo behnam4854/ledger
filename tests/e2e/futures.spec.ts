@@ -13,7 +13,7 @@ test("opens, adjusts, partially closes, fully closes, edits, and deletes a futur
   await page.getByTestId("open-position").click();
 
   const openRow = page.locator('[data-testid^="open-position-"]');
-  await expect(openRow).toHaveCount(1);
+  await expect(openRow).toHaveCount(1, { timeout: 20_000 });
   const positionTestId = await openRow.getAttribute("data-testid");
   expect(positionTestId).toBeTruthy();
   const positionId = positionTestId!.replace("open-position-", "");

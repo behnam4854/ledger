@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSession, signOut } from "next-auth/react";
 import * as api from "@/lib/api";
 import AppNav from "./AppNav";
+import UnifiedDashboard from "./UnifiedDashboard";
 import { parseCsv, toCsv } from "@/lib/csv";
 import { portfolioStats, portfolioValuation, unrealizedForBuy, unrealizedPnl } from "@/lib/calculations";
 import { fmtQty, fmtSignedPct, fmtSignedUsd, fmtUsd, today } from "@/lib/format";
@@ -11,6 +12,8 @@ import {
   CORE_COINS,
   type BuyWithRemaining,
   type CoinDefinition,
+  type FuturesAccountResponse,
+  type FuturesActivity,
   type PriceMap,
   type Portfolio,
   type Sell,
@@ -41,6 +44,8 @@ interface LedgerRow {
 export default function LedgerApp() {
   const { data: session } = useSession();
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
+  const [futuresAccount, setFuturesAccount] = useState<FuturesAccountResponse>({ balance: 0, positions: [] });
+  const [futuresActivity, setFuturesActivity] = useState<FuturesActivity[]>([]);
   const [prices, setPrices] = useState<PriceMap>(EMPTY_PRICES);
   const [coins, setCoins] = useState<CoinDefinition[]>(CORE_COINS);
   const [priceStatus, setPriceStatus] = useState<"live" | "offline" | "fetching">("fetching");
@@ -78,7 +83,12 @@ export default function LedgerApp() {
 
   const reload = useCallback(async () => {
     try {
-      setPortfolio(await api.fetchPortfolio());
+      const [nextPortfolio, nextFutures, nextActivity] = await Promise.all([
+        api.fetchPortfolio(), api.fetchFuturesAccount(), api.fetchFuturesActivity(50),
+      ]);
+      setPortfolio(nextPortfolio);
+      setFuturesAccount(nextFutures);
+      setFuturesActivity(nextActivity.activities);
     } catch (e) {
       console.error(e);
     }
@@ -487,6 +497,8 @@ export default function LedgerApp() {
       </div>
 
       {/* PORTFOLIO OVERVIEW */}
+      {portfolio && <UnifiedDashboard portfolio={portfolio} futures={futuresAccount} futuresActivity={futuresActivity} prices={prices} />}
+
       <PortfolioOverview
         buys={buys}
         prices={prices}
