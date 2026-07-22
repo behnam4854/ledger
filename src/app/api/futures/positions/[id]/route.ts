@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { DEFAULT_FUTURES_USD, FUTURES_USD_KEY, getUserCoins, prisma } from "@/lib/db";
 import { futuresMetrics, type FuturesSide } from "@/lib/futures";
+import { recordFuturesActivity } from "@/lib/futures-activity";
 import { getFuturesMarket } from "@/lib/futures-market";
 import { getPrices } from "@/lib/prices";
 
@@ -85,6 +86,19 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         initialMargin: new Decimal(position.initialMargin ?? position.margin).plus(marginDelta).toString(),
         stopLoss: stop.value?.toString() ?? null,
         takeProfit: target.value?.toString() ?? null,
+      },
+    });
+    await recordFuturesActivity(tx, {
+      userId,
+      positionId: id,
+      asset: position.asset,
+      side: position.side,
+      action: "POSITION_ADJUSTED",
+      summary: `Adjusted ${position.asset} ${position.side} risk controls`,
+      details: {
+        previousMargin: position.margin, margin: updatedMargin.toString(), marginDelta: marginDelta.toString(),
+        previousStopLoss: position.stopLoss, stopLoss: stop.value?.toString() ?? null,
+        previousTakeProfit: position.takeProfit, takeProfit: target.value?.toString() ?? null,
       },
     });
     return { ok: true } as const;

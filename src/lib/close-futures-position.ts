@@ -1,6 +1,7 @@
 import Decimal from "decimal.js";
 import { DEFAULT_FUTURES_USD, FUTURES_USD_KEY, prisma } from "./db";
 import { completedFundingIntervals, futuresFee, futuresFunding, type FuturesSide } from "./futures";
+import { recordFuturesActivity } from "./futures-activity";
 
 export class FuturesCloseError extends Error {
   constructor(message: string, public status = 409) { super(message); }
@@ -86,6 +87,23 @@ export async function closeFuturesPositionAtPrice(input: {
       closeReason: isFullClose ? input.reason ?? "MANUAL" : null,
       closedAt: isFullClose ? closedAt : null,
     } });
+    const reason = input.reason ?? "MANUAL";
+    await recordFuturesActivity(tx, {
+      userId: input.userId,
+      positionId: input.id,
+      asset: position.asset,
+      side: position.side,
+      action: isFullClose ? "POSITION_CLOSED" : "POSITION_PARTIALLY_CLOSED",
+      summary: isFullClose
+        ? `Closed ${position.asset} ${position.side} (${reason.replaceAll("_", " ").toLowerCase()})`
+        : `Partially closed ${position.asset} ${position.side}`,
+      details: {
+        reason, closeQuantity: closeQuantity.toString(), exitPrice: exitPrice.toString(),
+        grossPnl: grossPnl.toString(), realizedPnl: realizedPnl.toString(), exitFee: exitFee.toString(),
+        fundingPnl: fundingPnl.toString(), remainingQuantity: isFullClose ? "0" : remainingQuantity.toString(),
+        remainingMargin: isFullClose ? "0" : remainingMargin.toString(),
+      },
+    });
     return { pnl: realizedPnl.toString(), fullyClosed: isFullClose };
   });
 }

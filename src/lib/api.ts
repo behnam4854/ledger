@@ -5,6 +5,7 @@ import type {
   CandlesResponse,
   CoinDefinition,
   FuturesAccountResponse,
+  FuturesActivityResponse,
   FuturesMarketResponse,
   FuturesChartResponse,
   FuturesSide,
@@ -68,6 +69,12 @@ export async function fetchSignals(): Promise<SignalsResponse> {
 
 export async function fetchFuturesAccount(): Promise<FuturesAccountResponse> {
   return jsonOrThrow<FuturesAccountResponse>(await fetch("/api/futures", { cache: "no-store" }));
+}
+
+export async function fetchFuturesActivity(limit = 100): Promise<FuturesActivityResponse> {
+  return jsonOrThrow<FuturesActivityResponse>(
+    await fetch(`/api/futures/activity?limit=${limit}`, { cache: "no-store" }),
+  );
 }
 
 export async function fetchFuturesMarket(): Promise<FuturesMarketResponse> {

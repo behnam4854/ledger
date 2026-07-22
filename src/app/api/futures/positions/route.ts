@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { auth } from "@/auth";
 import { DEFAULT_FUTURES_USD, FUTURES_USD_KEY, getUserCoins, prisma } from "@/lib/db";
 import { futuresFee, futuresMetrics, type FuturesSide } from "@/lib/futures";
+import { recordFuturesActivity } from "@/lib/futures-activity";
 import { getPrices } from "@/lib/prices";
 
 export async function POST(req: NextRequest) {
@@ -161,6 +162,20 @@ export async function POST(req: NextRequest) {
         fundingRate: fundingRate.toString(),
         fundingIntervalHours,
         maintenanceMarginRate: maintenanceMarginRate.toString(),
+        autoCloseEnabled: body.autoCloseEnabled !== false,
+      },
+    });
+    await recordFuturesActivity(tx, {
+      userId,
+      positionId: position.id,
+      asset,
+      side,
+      action: "POSITION_OPENED",
+      summary: `Opened ${asset} ${side} at ${entryPrice.toString()}`,
+      details: {
+        entryPrice: entryPrice.toString(), margin: margin.toString(), leverage,
+        quantity: metrics.quantity, stopLoss: stopLoss?.toString() ?? null,
+        takeProfit: takeProfit?.toString() ?? null, feeRateBps: feeRateBps.toString(),
         autoCloseEnabled: body.autoCloseEnabled !== false,
       },
     });

@@ -25,6 +25,7 @@ model User {
   settings Setting[]
   coins    Coin[]
   futuresPositions FuturesPosition[]
+  futuresActivities FuturesActivity[]
 }
 
 // Extra assets a user has enabled for their portfolio. The three built-in
@@ -101,6 +102,24 @@ model FuturesExecution {
   closedAt        DateTime @default(now())
 
   @@index([positionId, closedAt])
+}
+
+// Immutable user-facing audit trail. positionId is intentionally a snapshot
+// rather than a relation so activity survives deletion of a closed trade.
+model FuturesActivity {
+  id         Int      @id @default(autoincrement())
+  userId     Int
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  positionId Int
+  asset      String
+  side       String
+  action     String
+  summary    String
+  details    String
+  createdAt  DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([positionId, createdAt])
 }
 
 model Buy {

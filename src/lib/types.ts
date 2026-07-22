@@ -148,6 +148,31 @@ export interface FuturesAccountResponse {
   positions: FuturesPosition[];
 }
 
+export type FuturesActivityAction =
+  | "POSITION_OPENED"
+  | "POSITION_ADJUSTED"
+  | "AUTOMATION_CHANGED"
+  | "JOURNAL_UPDATED"
+  | "POSITION_PARTIALLY_CLOSED"
+  | "POSITION_CLOSED"
+  | "CLOSED_TRADE_EDITED"
+  | "CLOSED_TRADE_DELETED";
+
+export interface FuturesActivity {
+  id: number;
+  positionId: number;
+  asset: string;
+  side: FuturesSide;
+  action: FuturesActivityAction;
+  summary: string;
+  details: Record<string, string | number | boolean | null>;
+  createdAt: string;
+}
+
+export interface FuturesActivityResponse {
+  activities: FuturesActivity[];
+}
+
 export interface FuturesMarketQuote {
   symbol: string;
   exchangeSymbol: string | null;

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
+import { recordFuturesActivity } from "@/lib/futures-activity";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -26,14 +27,22 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const validScreenshot = !screenshot || /^https:\/\//i.test(screenshot) || /^data:image\/(png|jpeg|webp|gif);base64,/i.test(screenshot);
   if (!validScreenshot) return NextResponse.json({ error: "Screenshot must be an HTTPS URL or an attached image" }, { status: 400 });
   if (screenshot.length > 2_750_000) return NextResponse.json({ error: "Screenshot must be smaller than 2 MB" }, { status: 400 });
-  await prisma.futuresPosition.update({
-    where: { id },
-    data: {
-      journalSetup: setup || null,
-      journalTags: tags || null,
-      journalNotes: notes || null,
-      journalScreenshot: screenshot || null,
-    },
+  await prisma.$transaction(async (tx) => {
+    await tx.futuresPosition.update({
+      where: { id },
+      data: {
+        journalSetup: setup || null,
+        journalTags: tags || null,
+        journalNotes: notes || null,
+        journalScreenshot: screenshot || null,
+      },
+    });
+    await recordFuturesActivity(tx, {
+      userId, positionId: id, asset: position.asset, side: position.side,
+      action: "JOURNAL_UPDATED",
+      summary: `Updated journal for ${position.asset} ${position.side}`,
+      details: { setup: setup || null, tags: tags || null, hasNotes: Boolean(notes), hasScreenshot: Boolean(screenshot) },
+    });
   });
   return NextResponse.json({ ok: true });
 }

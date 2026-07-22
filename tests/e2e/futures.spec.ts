@@ -55,4 +55,20 @@ test("opens, adjusts, partially closes, fully closes, edits, and deletes a futur
   page.once("dialog", async (dialog) => dialog.accept());
   await closedRow.getByRole("button", { name: "DELETE", exact: true }).click();
   await expect(page.locator(".futures-history tbody")).toContainText("Closed positions will appear here.");
+
+  const activity = await page.request.get("/api/futures/activity");
+  expect(activity.ok()).toBeTruthy();
+  const payload = await activity.json() as { activities: { positionId: number; action: string }[] };
+  const actions = payload.activities
+    .filter((event) => event.positionId === Number(positionId))
+    .map((event) => event.action);
+  expect(actions).toEqual(expect.arrayContaining([
+    "POSITION_OPENED",
+    "POSITION_ADJUSTED",
+    "POSITION_PARTIALLY_CLOSED",
+    "POSITION_CLOSED",
+    "CLOSED_TRADE_EDITED",
+    "CLOSED_TRADE_DELETED",
+  ]));
+  await expect(page.getByTestId("futures-activity")).toContainText("CLOSED TRADE DELETED");
 });

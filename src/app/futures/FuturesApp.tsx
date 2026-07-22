@@ -13,6 +13,8 @@ import { fmtQty, fmtSignedPct, fmtSignedUsd, fmtUsd } from "@/lib/format";
 import type {
   CoinDefinition,
   FuturesAccountResponse,
+  FuturesActivity,
+  FuturesActivityAction,
   FuturesPosition,
   FuturesMarketQuote,
   FuturesSide,
@@ -39,6 +41,8 @@ interface LivePosition extends FuturesPosition {
 export default function FuturesApp() {
   const { data: session } = useSession();
   const [account, setAccount] = useState<FuturesAccountResponse>({ balance: 0, positions: [] });
+  const [activities, setActivities] = useState<FuturesActivity[]>([]);
+  const [activityAsset, setActivityAsset] = useState("ALL");
   const [coins, setCoins] = useState<CoinDefinition[]>([]);
   const [prices, setPrices] = useState<PriceMap>({});
   const [futuresQuotes, setFuturesQuotes] = useState<Record<string, FuturesMarketQuote>>({});
@@ -89,7 +93,12 @@ export default function FuturesApp() {
   const [actionFeedback, setActionFeedback] = useState<{ tone: "success" | "error"; text: string } | null>(null);
 
   const loadAccount = useCallback(async () => {
-    setAccount(await api.fetchFuturesAccount());
+    const [nextAccount, activity] = await Promise.all([
+      api.fetchFuturesAccount(),
+      api.fetchFuturesActivity(),
+    ]);
+    setAccount(nextAccount);
+    setActivities(activity.activities);
   }, []);
 
   const refreshPrices = useCallback(async () => {
@@ -474,6 +483,11 @@ export default function FuturesApp() {
     URL.revokeObjectURL(link.href);
   };
 
+  const activityAssets = [...new Set(activities.map((activity) => activity.asset))].sort();
+  const visibleActivities = activityAsset === "ALL"
+    ? activities
+    : activities.filter((activity) => activity.asset === activityAsset);
+
   return (
     <div className="container futures-page">
       <header className="header">
@@ -792,6 +806,42 @@ export default function FuturesApp() {
         </div>
       )}
 
+      <div className="panel futures-activity" data-testid="futures-activity">
+        <div className="panel-header">
+          <div><span className="panel-title">ACTIVITY LOG</span><small>PERSISTENT FUTURES AUDIT TRAIL</small></div>
+          <div className="activity-controls">
+            <span className="position-count">{activities.length} EVENTS</span>
+            <select aria-label="Filter activity by asset" value={activityAsset} onChange={(event) => setActivityAsset(event.target.value)}>
+              <option value="ALL">ALL ASSETS</option>
+              {activityAssets.map((asset) => <option key={asset} value={asset}>{asset}</option>)}
+            </select>
+          </div>
+        </div>
+        {visibleActivities.length === 0 ? <div className="activity-empty">Trade changes and executions will appear here.</div> : (
+          <div className="activity-timeline">
+            {visibleActivities.map((activity) => (
+              <article className={`activity-item activity-${activityTone(activity.action)}`} key={activity.id}>
+                <span className="activity-marker" aria-hidden="true" />
+                <div className="activity-content">
+                  <div className="activity-meta">
+                    <span className="activity-action">{ACTIVITY_LABELS[activity.action]}</span>
+                    <span className={`futures-side ${activity.side.toLowerCase()}`}>{activity.side}</span>
+                    <span>{activity.asset}/USD</span>
+                    <time dateTime={activity.createdAt}>{new Date(activity.createdAt).toLocaleString()}</time>
+                  </div>
+                  <div className="activity-summary"><b>{activity.summary}</b><span>POSITION #{activity.positionId}</span></div>
+                  <div className="activity-details">
+                    {Object.entries(activity.details).filter(([, value]) => value !== null && value !== "").slice(0, 8).map(([key, value]) => (
+                      <div key={key}><span>{friendlyActivityKey(key)}</span><b>{formatActivityValue(key, value)}</b></div>
+                    ))}
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </div>
+
       <div className="panel futures-journal">
         <div className="panel-header">
           <div><span className="panel-title">TRADE JOURNAL</span><small>PLAN, REVIEW, TAGS & SCREENSHOT</small></div>
@@ -819,4 +869,34 @@ function FuturesStat({ label, value, tone }: { label: string; value: string; ton
 
 function PreviewRow({ label, value, danger }: { label: string; value: string; danger?: boolean }) {
   return <div><span>{label}</span><b className={danger ? "danger" : ""}>{value}</b></div>;
+}
+
+const ACTIVITY_LABELS: Record<FuturesActivityAction, string> = {
+  POSITION_OPENED: "POSITION OPENED",
+  POSITION_ADJUSTED: "RISK ADJUSTED",
+  AUTOMATION_CHANGED: "AUTOMATION CHANGED",
+  JOURNAL_UPDATED: "JOURNAL UPDATED",
+  POSITION_PARTIALLY_CLOSED: "PARTIAL EXIT",
+  POSITION_CLOSED: "POSITION CLOSED",
+  CLOSED_TRADE_EDITED: "CLOSED TRADE EDITED",
+  CLOSED_TRADE_DELETED: "CLOSED TRADE DELETED",
+};
+
+function activityTone(action: FuturesActivityAction) {
+  if (action === "POSITION_CLOSED" || action === "POSITION_PARTIALLY_CLOSED") return "exit";
+  if (action === "CLOSED_TRADE_DELETED") return "danger";
+  if (action === "POSITION_OPENED") return "open";
+  return "change";
+}
+
+function friendlyActivityKey(key: string) {
+  return key.replace(/([a-z])([A-Z])/g, "$1 $2").replaceAll("_", " ").toUpperCase();
+}
+
+function formatActivityValue(key: string, value: string | number | boolean | null) {
+  if (typeof value === "boolean") return value ? "YES" : "NO";
+  if (value === null) return "—";
+  if (/price|margin|pnl|fee/i.test(key) && Number.isFinite(Number(value))) return fmtUsd(Number(value));
+  if (/quantity/i.test(key) && Number.isFinite(Number(value))) return fmtQty(String(value));
+  return String(value).replaceAll("_", " ");
 }

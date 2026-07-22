@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { DEFAULT_FUTURES_USD, FUTURES_USD_KEY, prisma } from "@/lib/db";
 import { completedFundingIntervals, futuresFee, futuresFunding, type FuturesSide } from "@/lib/futures";
+import { recordFuturesActivity } from "@/lib/futures-activity";
 
 function decimal(value: unknown, label: string, options?: { allowZero?: boolean }) {
   try {
@@ -88,6 +89,18 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       await tx.futuresPosition.update({ where: { id }, data: {
         side, leverage, margin: margin.toString(), initialMargin: margin.toString(), quantity: quantity.toString(), initialQuantity: quantity.toString(), entryPrice: entryPrice.toString(), exitPrice: exitPrice.toString(), stopLoss: stopLoss?.toString() ?? null, takeProfit: takeProfit?.toString() ?? null, plannedRisk: stopLoss ? quantity.times(entryPrice.minus(stopLoss).abs()).toString() : null, feeRateBps: feeRateBps.toString(), entryFee: entryFee.toString(), exitFee: exitFee.toString(), fundingRate: fundingRate.toString(), fundingPnl: fundingPnl.toString(), grossPnl: grossPnl.toString(), realizedPnl: realizedPnl.toString(), openedAt, closedAt,
       } });
+      await recordFuturesActivity(tx, {
+        userId, positionId: id, asset: position.asset, side,
+        action: "CLOSED_TRADE_EDITED",
+        summary: `Edited closed ${position.asset} ${side} trade`,
+        details: {
+          previousSide: position.side, side, previousLeverage: position.leverage, leverage,
+          previousMargin: position.initialMargin ?? position.margin, margin: margin.toString(),
+          previousEntryPrice: position.entryPrice, entryPrice: entryPrice.toString(),
+          previousExitPrice: position.exitPrice, exitPrice: exitPrice.toString(),
+          previousRealizedPnl: position.realizedPnl, realizedPnl: realizedPnl.toString(),
+        },
+      });
       return { realizedPnl: realizedPnl.toString() } as const;
     });
     if ("error" in result) return NextResponse.json({ error: result.error }, { status: 409 });
@@ -110,6 +123,16 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
     const updatedBalance = balance.minus(position.realizedPnl ?? "0");
     if (updatedBalance.isNegative()) return { error: "Deleting this winning trade would make the available balance negative" } as const;
     await tx.setting.upsert({ where: { userId_key: { userId, key: FUTURES_USD_KEY } }, create: { userId, key: FUTURES_USD_KEY, value: updatedBalance.toString() }, update: { value: updatedBalance.toString() } });
+    await recordFuturesActivity(tx, {
+      userId, positionId: id, asset: position.asset, side: position.side,
+      action: "CLOSED_TRADE_DELETED",
+      summary: `Deleted closed ${position.asset} ${position.side} trade`,
+      details: {
+        entryPrice: position.entryPrice, exitPrice: position.exitPrice,
+        realizedPnl: position.realizedPnl, openedAt: position.openedAt.toISOString(),
+        closedAt: position.closedAt?.toISOString() ?? null,
+      },
+    });
     await tx.futuresPosition.delete({ where: { id } });
     return { ok: true } as const;
   });

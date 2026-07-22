@@ -14,9 +14,9 @@
 - [x] Add automated mobile viewport coverage for the portfolio and futures workspaces.
 - [x] Add order validation and confirmation dialogs before closing positions.
 
-## Sprint 2 — Trading audit history
+## Sprint 2 — Trading audit history (complete)
 
-- [ ] Add a persistent activity log for every position change and execution.
+- [x] Add a persistent activity log for every position change and execution.
 
 ## Trading features
 
