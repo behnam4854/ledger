@@ -693,17 +693,20 @@ export default function LedgerApp() {
               </div>
               <div className="field">
                 <label htmlFor="buyAsset">ASSET</label>
-                <select
+                <input
                   id="buyAsset"
+                  type="search"
+                  list="portfolioCoinOptions"
+                  autoComplete="off"
                   value={buyForm.asset}
-                  onChange={(e) => setBuyForm((f) => ({ ...f, asset: e.target.value }))}
-                >
+                  onChange={(e) => setBuyForm((f) => ({ ...f, asset: e.target.value.trim().toUpperCase() }))}
+                  placeholder="Search symbol or coin name"
+                />
+                <datalist id="portfolioCoinOptions">
                   {coins.map((coin) => (
-                    <option key={coin.symbol} value={coin.symbol}>
-                      {coin.symbol} — {coin.name}
-                    </option>
+                    <option key={coin.symbol} value={coin.symbol}>{coin.name}</option>
                   ))}
-                </select>
+                </datalist>
               </div>
               <div className="field field-wide">
                 <label htmlFor="buyAmount">AMOUNT</label>

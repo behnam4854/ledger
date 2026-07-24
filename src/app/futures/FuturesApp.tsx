@@ -43,6 +43,14 @@ export default function FuturesApp() {
   const [account, setAccount] = useState<FuturesAccountResponse>({ balance: 0, positions: [] });
   const [activities, setActivities] = useState<FuturesActivity[]>([]);
   const [activityAsset, setActivityAsset] = useState("ALL");
+  const [activityAssets, setActivityAssets] = useState<string[]>([]);
+  const [activityTotal, setActivityTotal] = useState(0);
+  const [activityExpanded, setActivityExpanded] = useState(false);
+  const [activityPage, setActivityPage] = useState(1);
+  const [activityTotalPages, setActivityTotalPages] = useState(1);
+  const [activityPageItems, setActivityPageItems] = useState<FuturesActivity[]>([]);
+  const [activityLoading, setActivityLoading] = useState(false);
+  const [activityVersion, setActivityVersion] = useState(0);
   const [coins, setCoins] = useState<CoinDefinition[]>([]);
   const [prices, setPrices] = useState<PriceMap>({});
   const [futuresQuotes, setFuturesQuotes] = useState<Record<string, FuturesMarketQuote>>({});
@@ -95,10 +103,13 @@ export default function FuturesApp() {
   const loadAccount = useCallback(async () => {
     const [nextAccount, activity] = await Promise.all([
       api.fetchFuturesAccount(),
-      api.fetchFuturesActivity(),
+      api.fetchFuturesActivity(5),
     ]);
     setAccount(nextAccount);
     setActivities(activity.activities);
+    setActivityTotal(activity.total);
+    setActivityAssets(activity.assets);
+    setActivityVersion((version) => version + 1);
   }, []);
 
   const refreshPrices = useCallback(async () => {
@@ -129,6 +140,26 @@ export default function FuturesApp() {
     loadAccount().catch((reason) => setError(reason instanceof Error ? reason.message : "Failed to load account"));
     refreshPrices();
   }, [loadAccount, refreshPrices]);
+
+  useEffect(() => {
+    if (!activityExpanded) return;
+    let active = true;
+    setActivityLoading(true);
+    api.fetchFuturesActivityPage(activityPage, 10, activityAsset)
+      .then((result) => {
+        if (!active) return;
+        setActivityPageItems(result.activities);
+        setActivityTotal(result.total);
+        setActivityTotalPages(result.totalPages);
+        setActivityAssets(result.assets);
+        if (activityPage > result.totalPages) setActivityPage(result.totalPages);
+      })
+      .catch((reason) => {
+        if (active) setError(reason instanceof Error ? reason.message : "Failed to load activity history");
+      })
+      .finally(() => { if (active) setActivityLoading(false); });
+    return () => { active = false; };
+  }, [activityAsset, activityExpanded, activityPage, activityVersion]);
 
   useEffect(() => {
     const id = setInterval(refreshPrices, 10_000);
@@ -483,10 +514,7 @@ export default function FuturesApp() {
     URL.revokeObjectURL(link.href);
   };
 
-  const activityAssets = [...new Set(activities.map((activity) => activity.asset))].sort();
-  const visibleActivities = activityAsset === "ALL"
-    ? activities
-    : activities.filter((activity) => activity.asset === activityAsset);
+  const visibleActivities = activityExpanded ? activityPageItems : activities;
 
   return (
     <div className="container futures-page">
@@ -557,9 +585,8 @@ export default function FuturesApp() {
           <form onSubmit={submitOrder} className="futures-order-form" data-testid="futures-order-form">
             <div className="field">
               <label htmlFor="futuresAsset">CONTRACT</label>
-              <select id="futuresAsset" value={order.asset} onChange={(event) => setOrder((current) => ({ ...current, asset: event.target.value }))}>
-                {coins.map((coin) => <option key={coin.symbol} value={coin.symbol}>{coin.symbol} / USD — {coin.name}</option>)}
-              </select>
+              <input id="futuresAsset" type="search" list="futuresCoinOptions" autoComplete="off" value={order.asset} onChange={(event) => setOrder((current) => ({ ...current, asset: event.target.value.trim().toUpperCase() }))} placeholder="Search symbol or coin name" />
+              <datalist id="futuresCoinOptions">{coins.map((coin) => <option key={coin.symbol} value={coin.symbol}>{coin.name}</option>)}</datalist>
             </div>
 
             <div className="side-switch" role="group" aria-label="Position side">
@@ -806,42 +833,6 @@ export default function FuturesApp() {
         </div>
       )}
 
-      <div className="panel futures-activity" data-testid="futures-activity">
-        <div className="panel-header">
-          <div><span className="panel-title">ACTIVITY LOG</span><small>PERSISTENT FUTURES AUDIT TRAIL</small></div>
-          <div className="activity-controls">
-            <span className="position-count">{activities.length} EVENTS</span>
-            <select aria-label="Filter activity by asset" value={activityAsset} onChange={(event) => setActivityAsset(event.target.value)}>
-              <option value="ALL">ALL ASSETS</option>
-              {activityAssets.map((asset) => <option key={asset} value={asset}>{asset}</option>)}
-            </select>
-          </div>
-        </div>
-        {visibleActivities.length === 0 ? <div className="activity-empty">Trade changes and executions will appear here.</div> : (
-          <div className="activity-timeline">
-            {visibleActivities.map((activity) => (
-              <article className={`activity-item activity-${activityTone(activity.action)}`} key={activity.id}>
-                <span className="activity-marker" aria-hidden="true" />
-                <div className="activity-content">
-                  <div className="activity-meta">
-                    <span className="activity-action">{ACTIVITY_LABELS[activity.action]}</span>
-                    <span className={`futures-side ${activity.side.toLowerCase()}`}>{activity.side}</span>
-                    <span>{activity.asset}/USD</span>
-                    <time dateTime={activity.createdAt}>{new Date(activity.createdAt).toLocaleString()}</time>
-                  </div>
-                  <div className="activity-summary"><b>{activity.summary}</b><span>POSITION #{activity.positionId}</span></div>
-                  <div className="activity-details">
-                    {Object.entries(activity.details).filter(([, value]) => value !== null && value !== "").slice(0, 8).map(([key, value]) => (
-                      <div key={key}><span>{friendlyActivityKey(key)}</span><b>{formatActivityValue(key, value)}</b></div>
-                    ))}
-                  </div>
-                </div>
-              </article>
-            ))}
-          </div>
-        )}
-      </div>
-
       <div className="panel futures-journal">
         <div className="panel-header">
           <div><span className="panel-title">TRADE JOURNAL</span><small>PLAN, REVIEW, TAGS & SCREENSHOT</small></div>
@@ -858,6 +849,50 @@ export default function FuturesApp() {
             <div className="journal-screenshot">{journalDraft.screenshot ? <img src={journalDraft.screenshot} alt="Attached trade chart" /> : <span>NO SCREENSHOT ATTACHED</span>}</div>
           </div>
         )}
+      </div>
+
+      <div className={`panel futures-activity${activityExpanded ? " expanded" : " compact"}`} data-testid="futures-activity">
+        <div className="panel-header">
+          <div><span className="panel-title">ACTIVITY LOG</span><small>{activityExpanded ? "FULL PAGINATED AUDIT TRAIL" : "5 MOST RECENT FUTURES EVENTS"}</small></div>
+          <div className="activity-controls">
+            <span className="position-count">{activityTotal} EVENTS</span>
+            {activityExpanded && <select aria-label="Filter activity by asset" value={activityAsset} onChange={(event) => { setActivityAsset(event.target.value); setActivityPage(1); }}>
+              <option value="ALL">ALL ASSETS</option>
+              {activityAssets.map((asset) => <option key={asset} value={asset}>{asset}</option>)}
+            </select>}
+            <button className="btn-ghost btn-sm" type="button" onClick={() => { if (activityExpanded) loadAccount().catch(() => undefined); setActivityExpanded((expanded) => !expanded); setActivityPage(1); setActivityAsset("ALL"); }}>
+              {activityExpanded ? "SHOW RECENT" : "VIEW FULL HISTORY"}
+            </button>
+          </div>
+        </div>
+        {activityLoading ? <div className="activity-empty">LOADING HISTORY...</div> : visibleActivities.length === 0 ? <div className="activity-empty">Trade changes and executions will appear here.</div> : (
+          <div className="activity-timeline">
+            {visibleActivities.map((activity) => (
+              <article className={`activity-item activity-${activityTone(activity.action)}`} key={activity.id}>
+                <span className="activity-marker" aria-hidden="true" />
+                <div className="activity-content">
+                  <div className="activity-meta">
+                    <span className="activity-action">{ACTIVITY_LABELS[activity.action]}</span>
+                    <span className={`futures-side ${activity.side.toLowerCase()}`}>{activity.side}</span>
+                    <span>{activity.asset}/USD</span>
+                    <time dateTime={activity.createdAt}>{new Date(activity.createdAt).toLocaleString()}</time>
+                  </div>
+                  <div className="activity-summary"><b>{activity.summary}</b><span>POSITION #{activity.positionId}</span></div>
+                  {activityExpanded && <div className="activity-details">
+                    {Object.entries(activity.details).filter(([, value]) => value !== null && value !== "").slice(0, 8).map(([key, value]) => (
+                      <div key={key}><span>{friendlyActivityKey(key)}</span><b>{formatActivityValue(key, value)}</b></div>
+                    ))}
+                  </div>}
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+        {activityExpanded && activityTotalPages > 1 && <div className="activity-pagination" aria-label="Activity history pages">
+          <button className="btn-ghost btn-sm" type="button" disabled={activityPage <= 1 || activityLoading} onClick={() => setActivityPage((page) => page - 1)}>PREVIOUS</button>
+          <span>PAGE {activityPage} / {activityTotalPages}</span>
+          <button className="btn-ghost btn-sm" type="button" disabled={activityPage >= activityTotalPages || activityLoading} onClick={() => setActivityPage((page) => page + 1)}>NEXT</button>
+        </div>}
       </div>
     </div>
   );

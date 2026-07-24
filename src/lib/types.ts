@@ -171,6 +171,11 @@ export interface FuturesActivity {
 
 export interface FuturesActivityResponse {
   activities: FuturesActivity[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+  assets: string[];
 }
 
 export interface FuturesMarketQuote {

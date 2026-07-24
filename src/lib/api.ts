@@ -77,6 +77,14 @@ export async function fetchFuturesActivity(limit = 100): Promise<FuturesActivity
   );
 }
 
+export async function fetchFuturesActivityPage(page: number, pageSize = 10, asset = "ALL"): Promise<FuturesActivityResponse> {
+  const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
+  if (asset !== "ALL") params.set("asset", asset);
+  return jsonOrThrow<FuturesActivityResponse>(
+    await fetch(`/api/futures/activity?${params}`, { cache: "no-store" }),
+  );
+}
+
 export async function fetchFuturesMarket(): Promise<FuturesMarketResponse> {
   return jsonOrThrow<FuturesMarketResponse>(
     await fetch("/api/futures/market", { cache: "no-store" }),

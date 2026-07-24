@@ -8,6 +8,7 @@ test("portfolio and futures workspaces do not overflow common phone viewports", 
     await page.setViewportSize(viewport);
     await page.goto("/");
     await expect(page.getByTestId("unified-dashboard")).toBeVisible();
+    await expect(page.locator("#buyAsset")).toHaveAttribute("list", "portfolioCoinOptions");
     await expectNoHorizontalOverflow(page);
     await page.goto("/futures");
     await expect(page.locator(".futures-risk-panel")).toBeHidden();

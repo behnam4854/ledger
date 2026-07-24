@@ -2300,6 +2300,9 @@ button:disabled { opacity: 0.35; cursor: not-allowed; }
 .activity-details span { overflow: hidden; color: var(--text-dim); font: 0.45rem var(--mono); letter-spacing: 0.05em; text-overflow: ellipsis; white-space: nowrap; }
 .activity-details b { overflow-wrap: anywhere; color: var(--text); font: 0.58rem var(--mono); }
 .activity-empty { padding: 1.5rem; color: var(--text-dim); text-align: center; font-size: 0.65rem; }
+.futures-activity.compact .activity-content { margin-bottom: 0.45rem; padding-block: 0.6rem; }
+.activity-pagination { display: flex; align-items: center; justify-content: center; gap: 0.7rem; padding: 0.75rem; border-top: 1px solid var(--border); }
+.activity-pagination span { color: var(--text-dim); font: 0.52rem var(--mono); letter-spacing: 0.06em; }
 
 @media (max-width: 1050px) {
   .header { justify-content: center; }
@@ -2383,6 +2386,8 @@ button:disabled { opacity: 0.35; cursor: not-allowed; }
   .futures-activity .panel-header { align-items: stretch; flex-direction: column; gap: 0.65rem; }
   .activity-controls { display: grid; grid-template-columns: auto minmax(0, 1fr); }
   .activity-controls select { width: 100%; min-height: 44px; }
+  .activity-controls .btn-ghost { min-height: 44px; justify-content: center; }
+  .activity-controls select { grid-column: 1 / -1; }
   .activity-timeline { padding: 0.65rem; }
   .activity-item { gap: 0.5rem; }
   .activity-content { padding: 0.65rem; }

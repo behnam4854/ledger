@@ -5,6 +5,9 @@ test("opens, adjusts, partially closes, fully closes, edits, and deletes a futur
   await register(page, uniqueEmail("futures"));
   await page.goto("/futures");
 
+  await expect(page.locator("#futuresAsset")).toHaveAttribute("type", "search");
+  await expect(page.locator("#futuresAsset")).toHaveAttribute("list", "futuresCoinOptions");
+
   await page.locator("#futuresMargin").fill("200");
   await page.locator("#futuresEntryPrice").fill("50000");
   await page.locator("#futuresStopLoss").fill("45000");
@@ -17,6 +20,11 @@ test("opens, adjusts, partially closes, fully closes, edits, and deletes a futur
   const positionTestId = await openRow.getAttribute("data-testid");
   expect(positionTestId).toBeTruthy();
   const positionId = positionTestId!.replace("open-position-", "");
+
+  for (let index = 0; index < 6; index += 1) {
+    const automation = await page.request.patch(`/api/futures/positions/${positionId}/automation`, { data: { enabled: index % 2 === 0 } });
+    expect(automation.ok()).toBeTruthy();
+  }
 
   await openRow.getByRole("button", { name: "ADJUST", exact: true }).click();
   await page.getByLabel("Adjusted stop-loss for BTC").fill("46000");
@@ -70,5 +78,14 @@ test("opens, adjusts, partially closes, fully closes, edits, and deletes a futur
     "CLOSED_TRADE_EDITED",
     "CLOSED_TRADE_DELETED",
   ]));
-  await expect(page.getByTestId("futures-activity")).toContainText("CLOSED TRADE DELETED");
+  const activityPanel = page.getByTestId("futures-activity");
+  await expect(activityPanel).toContainText("CLOSED TRADE DELETED");
+  await expect(activityPanel.locator("article")).toHaveCount(5);
+  await expect(page.locator(".futures-journal + .futures-activity")).toHaveCount(1);
+  await activityPanel.getByRole("button", { name: "VIEW FULL HISTORY", exact: true }).click();
+  await expect(activityPanel.locator("article")).toHaveCount(10);
+  await expect(activityPanel).toContainText("PAGE 1 / 2");
+  await activityPanel.getByRole("button", { name: "NEXT", exact: true }).click();
+  await expect(activityPanel).toContainText("PAGE 2 / 2");
+  await expect(activityPanel.locator("article")).toHaveCount(2);
 });
